@@ -1,0 +1,5 @@
+voice-changer/
+__pycache__/
+*.pyc
+.idea/
+.vscode/
