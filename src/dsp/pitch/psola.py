@@ -66,9 +66,11 @@ class PSOLAPitchShifter:
         T = int(self.fs / f0)
         T_new = int(T / pitch_ratio)
 
-        output = np.zeros(len(frame) + 2*T)
+        output = np.zeros(len(frame) + 2 * T)
+        weight = np.zeros(len(frame) + 2 * T)
 
         marks = np.arange(T, len(frame) - T, T)
+        marks = self._refine_marks(frame, marks, T)
 
         for i, m in enumerate(marks):
             start = m - T
@@ -90,8 +92,34 @@ class PSOLAPitchShifter:
                 continue
 
             output[new_start:new_end] += segment
+            weight[new_start:new_end] += window
+
+        # 避免除0
+        nonzero = weight > 0.5
+        output[nonzero] /= weight[nonzero]
 
         return output[:len(frame)]
+
+    def _refine_marks(self, frame, marks, T):
+        refined = []
+
+        search_radius = int(0.2 * T)
+
+        for m in marks:
+            start = max(m - search_radius, 0)
+            end = min(m + search_radius, len(frame))
+
+            segment = frame[start:end]
+
+            if len(segment) == 0:
+                continue
+
+            peak = np.argmax(np.abs(segment))
+            refined_mark = start + peak
+
+            refined.append(refined_mark)
+
+        return np.array(refined)
 
 if __name__ == "__main__":
     audio, fs = sf.read("voice.wav")
@@ -102,7 +130,7 @@ if __name__ == "__main__":
         audio = audio[:, 0]
         print(f"转换为单声道: {audio.shape}")
 
-    shifter = PSOLAPitchShifter(fs, semitone=-4)
+    shifter = PSOLAPitchShifter(fs, semitone=+2)
     print(f"变调器: 半音偏移={shifter.semitone}")
 
     # 测试整段
