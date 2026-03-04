@@ -69,10 +69,19 @@ class PSOLAPitchShifter:
         output = np.zeros(len(frame) + 2 * T)
         weight = np.zeros(len(frame) + 2 * T)
 
-        marks = np.arange(T, len(frame) - T, T)
-        marks = self._refine_marks(frame, marks, T)
+        # -------- 分析 marks --------
+        analysis_marks = np.arange(T, len(frame) - T, T)
+        analysis_marks = self._refine_marks(frame, analysis_marks, T)
 
-        for i, m in enumerate(marks):
+        # -------- 合成 marks --------
+        synthesis_marks = np.arange(T, len(frame) - T, T_new)
+
+        for new_m in synthesis_marks:
+
+            # 找到最近的原始 mark
+            idx = np.argmin(np.abs(analysis_marks - new_m))
+            m = analysis_marks[idx]
+
             start = m - T
             end = m + T
 
@@ -80,13 +89,11 @@ class PSOLAPitchShifter:
                 continue
 
             segment = frame[start:end]
-
             window = np.hanning(len(segment))
-            segment = segment * window
+            segment *= window
 
-            new_m = int(i * T_new + T)
-            new_start = new_m - T
-            new_end = new_m + T
+            new_start = int(new_m - T)
+            new_end = int(new_m + T)
 
             if new_start < 0 or new_end > len(output):
                 continue
@@ -94,9 +101,8 @@ class PSOLAPitchShifter:
             output[new_start:new_end] += segment
             weight[new_start:new_end] += window
 
-        # 避免除0
-        nonzero = weight > 0.5
-        output[nonzero] /= weight[nonzero]
+        mask = weight > 0.5
+        output[mask] /= weight[mask]
 
         return output[:len(frame)]
 
