@@ -1,51 +1,116 @@
 import numpy as np
-import soundfile as sf
-import os
+import sounddevice as sd
 
-# 如不存在voice.wav，就生成一个测试音频
-if not os.path.exists("voice.wav"):
-    print("生成测试音频文件...")
-    fs = 16000  # 采样率
-    duration = 2 # 2秒
+class RealtimePSOLA:
 
-    # 生成一个简单的元音序列（100Hz的基频）
-    t = np.linspace(0, duration, int(fs * duration))
-
-    # 模拟元音a: 基频100Hz + 谐波
-    f0 = 100  # 基频
-    audio = (np.sin(2 * np.pi * f0 * t) +  # 基频
-             0.5 * np.sin(2 * np.pi * 2 * f0 * t) +  # 二次谐波
-             0.3 * np.sin(2 * np.pi * 3 * f0 * t) +  # 三次谐波
-             0.1 * np.sin(2 * np.pi * 4 * f0 * t))  # 四次谐波
-
-    # 添加包络（让声音更自然）
-    envelope = np.exp(-t / 0.5)  # 衰减包络
-    audio = audio * envelope
-
-    # 保存为wav文件
-    sf.write("voice.wav", audio, fs)
-    print("测试音频已生成: voice.wav")
-else:
-    print("找到现有voice.wav文件")
-
-audio, fs = sf.read("voice.wav")
-print(f"音频加载成功: 长度={len(audio)}点, 采样率={fs}Hz")
-
-class PSOLAPitchShifter:
     def __init__(self, fs, semitone=0):
+
         self.fs = fs
-        self.semitone = semitone
+        self.pitch_ratio = 2 ** (semitone / 12)
 
-    def process(self, frame):
+        # 分析缓冲
+        self.buffer_size = 4096
+        self.buffer = np.zeros(self.buffer_size)
+        self.write_ptr = 0
+
+        # 上次周期
+        self.prev_f0 = 150
+        self.T = int(fs / self.prev_f0)
+
+    # ==========================
+    # 主处理函数
+    # ==========================
+    def process_block(self, input_block):
+
+        N = len(input_block)
+
+        # 写入环形缓冲
+        for i in range(N):
+            self.buffer[self.write_ptr] = input_block[i]
+            self.write_ptr = (self.write_ptr + 1) % self.buffer_size
+
+        frame = self._get_recent_frame(2048)
+
         f0 = self._estimate_f0(frame)
-        if f0 is None:
-            return frame
-        return self._psola(frame, f0)
 
+        if f0 is not None:
+            self.prev_f0 = 0.9 * self.prev_f0 + 0.1 * f0
+
+        T = int(self.fs / self.prev_f0)
+        T = np.clip(T, 40, 400)
+
+        # pitch marks
+        marks = np.arange(T, len(frame) - T, T)
+
+        if len(marks) < 2:
+            return input_block
+
+        output = np.zeros(N)
+        out_ptr = 0
+        mark_index = 0
+
+        new_spacing = int(T / self.pitch_ratio)
+
+        while out_ptr < N and mark_index < len(marks):
+
+            m = int(marks[mark_index])
+
+            start = m - T
+            end = m + T
+
+            if start < 0 or end > len(frame):
+                mark_index += 1
+                continue
+
+            segment = frame[start:end].copy()
+
+            window = np.hanning(len(segment))
+            segment *= window
+
+            seg_len = len(segment)
+
+            if out_ptr + seg_len > N:
+                break
+
+            output[out_ptr:out_ptr + seg_len] += segment
+
+            out_ptr += new_spacing
+            mark_index += 1
+
+        # 音量匹配
+        in_energy = np.sqrt(np.mean(input_block ** 2))
+        out_energy = np.sqrt(np.mean(output ** 2))
+
+        if out_energy > 1e-6:
+            output *= in_energy / out_energy
+
+        if np.max(np.abs(output)) < 1e-6:
+            return input_block
+
+        return output
+
+    # ==========================
+    # 最近帧
+    # ==========================
+    def _get_recent_frame(self, length):
+
+        if self.write_ptr - length >= 0:
+            return self.buffer[self.write_ptr-length:self.write_ptr]
+
+        part1 = self.buffer[self.write_ptr-length:]
+        part2 = self.buffer[:self.write_ptr]
+
+        return np.concatenate([part1, part2])
+
+    # ==========================
+    # 自相关 F0
+    # ==========================
     def _estimate_f0(self, frame, fmin=80, fmax=400):
+
         frame = frame - np.mean(frame)
 
-        if np.max(np.abs(frame)) < 1e-3:
+        energy = np.sqrt(np.mean(frame**2))
+        if energy < 1e-4:
             return None
 
         autocorr = np.correlate(frame, frame, mode='full')
@@ -58,94 +123,36 @@ class PSOLAPitchShifter:
             return None
 
         lag = np.argmax(autocorr[min_lag:max_lag]) + min_lag
+
         return self.fs / lag
 
-    def _psola(self, frame, f0):
-        pitch_ratio = 2 ** (self.semitone / 12)
 
-        T = int(self.fs / f0)
-        T_new = int(T / pitch_ratio)
+# ==============================
+# 实时音频
+# ==============================
 
-        output = np.zeros(len(frame) + 2 * T)
-        weight = np.zeros(len(frame) + 2 * T)
+fs = 16000
+block_size = 1024
 
-        # -------- 分析 marks --------
-        analysis_marks = np.arange(T, len(frame) - T, T)
-        analysis_marks = self._refine_marks(frame, analysis_marks, T)
+psola = RealtimePSOLA(fs, semitone=-4)
 
-        # -------- 合成 marks --------
-        synthesis_marks = np.arange(T, len(frame) - T, T_new)
+def callback(indata, outdata, frames, time, status):
 
-        for new_m in synthesis_marks:
+    input_block = indata[:,0]
 
-            # 找到最近的原始 mark
-            idx = np.argmin(np.abs(analysis_marks - new_m))
-            m = analysis_marks[idx]
+    processed = psola.process_block(input_block)
 
-            start = m - T
-            end = m + T
+    outdata[:] = processed.reshape(-1,1)
 
-            if start < 0 or end > len(frame):
-                continue
 
-            segment = frame[start:end]
-            window = np.hanning(len(segment))
-            segment *= window
+print("PSOLA 实时变声启动")
 
-            new_start = int(new_m - T)
-            new_end = int(new_m + T)
+with sd.Stream(
+        samplerate=fs,
+        blocksize=block_size,
+        channels=1,
+        dtype='float32',
+        callback=callback):
 
-            if new_start < 0 or new_end > len(output):
-                continue
-
-            output[new_start:new_end] += segment
-            weight[new_start:new_end] += window
-
-        mask = weight > 0.5
-        output[mask] /= weight[mask]
-
-        return output[:len(frame)]
-
-    def _refine_marks(self, frame, marks, T):
-        refined = []
-
-        search_radius = int(0.2 * T)
-
-        for m in marks:
-            start = max(m - search_radius, 0)
-            end = min(m + search_radius, len(frame))
-
-            segment = frame[start:end]
-
-            if len(segment) == 0:
-                continue
-
-            peak = np.argmax(np.abs(segment))
-            refined_mark = start + peak
-
-            refined.append(refined_mark)
-
-        return np.array(refined)
-
-if __name__ == "__main__":
-    audio, fs = sf.read("voice.wav")
-    print(f"原始音频: 长度={len(audio)}点, 时长={len(audio) / fs:.2f}秒, 采样率={fs}Hz")
-
-    # 如果是双声道，转单声道
-    if len(audio.shape) > 1:
-        audio = audio[:, 0]
-        print(f"转换为单声道: {audio.shape}")
-
-    shifter = PSOLAPitchShifter(fs, semitone=+2)
-    print(f"变调器: 半音偏移={shifter.semitone}")
-
-    # 测试整段
-    print("正在处理音频...")
-    output = shifter.process(audio)
-
-    print(f"处理后音频: 长度={len(output)}点, 时长={len(output) / fs:.2f}秒")
-    print(f"原始长度: {len(audio)} → 处理后长度: {len(output)}")
-    print(f"长度变化比例: {len(output) / len(audio):.3f}")
-
-    sf.write("shifted.wav", output, fs)
-    print("已保存: shifted.wav")
+    while True:
+        sd.sleep(1000)
