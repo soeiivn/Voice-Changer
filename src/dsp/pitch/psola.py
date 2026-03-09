@@ -1,5 +1,7 @@
 import numpy as np
 import sounddevice as sd
+import sys
+
 
 class RealtimePSOLA:
 
@@ -95,9 +97,9 @@ class RealtimePSOLA:
     def _get_recent_frame(self, length):
 
         if self.write_ptr - length >= 0:
-            return self.buffer[self.write_ptr-length:self.write_ptr]
+            return self.buffer[self.write_ptr - length:self.write_ptr]
 
-        part1 = self.buffer[self.write_ptr-length:]
+        part1 = self.buffer[self.write_ptr - length:]
         part2 = self.buffer[:self.write_ptr]
 
         return np.concatenate([part1, part2])
@@ -109,12 +111,12 @@ class RealtimePSOLA:
 
         frame = frame - np.mean(frame)
 
-        energy = np.sqrt(np.mean(frame**2))
+        energy = np.sqrt(np.mean(frame ** 2))
         if energy < 1e-4:
             return None
 
         autocorr = np.correlate(frame, frame, mode='full')
-        autocorr = autocorr[len(autocorr)//2:]
+        autocorr = autocorr[len(autocorr) // 2:]
 
         min_lag = int(self.fs / fmax)
         max_lag = int(self.fs / fmin)
@@ -126,7 +128,6 @@ class RealtimePSOLA:
 
         return self.fs / lag
 
-
 # ==============================
 # 实时音频
 # ==============================
@@ -134,25 +135,63 @@ class RealtimePSOLA:
 fs = 16000
 block_size = 1024
 
-psola = RealtimePSOLA(fs, semitone=-4)
+psola = RealtimePSOLA(fs, semitone=4)
 
 def callback(indata, outdata, frames, time, status):
+    if status:
+        print(f"Status: {status}")
 
-    input_block = indata[:,0]
+    try:
+        input_block = indata[:, 0]
+        processed = psola.process_block(input_block)
+        outdata[:] = processed.reshape(-1, 1)
+    except Exception as e:
+        print(f"处理错误: {e}")
+        # 出错时输出原始音频（安全模式）
+        outdata[:] = indata
 
-    processed = psola.process_block(input_block)
 
-    outdata[:] = processed.reshape(-1,1)
-
-
+print("=" * 50)
 print("PSOLA 实时变声启动")
+print(f"设置: {psola.pitch_ratio:.2f} 倍音高 ({psola.pitch_ratio * 100:.0f}%)")
+print("按 Ctrl+F2 停止程序...")
+print("=" * 50)
 
-with sd.Stream(
-        samplerate=fs,
-        blocksize=block_size,
-        channels=1,
-        dtype='float32',
-        callback=callback):
+try:
+    with sd.Stream(
+            samplerate=fs,
+            blocksize=block_size,
+            channels=1,
+            dtype='float32',
+            callback=callback):
 
-    while True:
-        sd.sleep(1000)
+        print("音频流已启动，正在处理...")
+        print("-" * 50)
+
+        # 添加计数器显示运行时间
+        import time
+
+        start_time = time.time()
+        counter = 0
+
+        while True:
+            sd.sleep(1000)
+            counter += 1
+            if counter % 5 == 0:  # 每5秒显示一次状态
+                elapsed = time.time() - start_time
+                print(f"⏱️ 运行中... {elapsed:.0f}秒")
+
+except KeyboardInterrupt:
+    print("\n👋 检测到中断信号，正在停止程序...")
+
+except Exception as e:
+    print(f"\n❌ 发生错误: {e}")
+    import traceback
+
+    traceback.print_exc()
+
+finally:
+    print("正在清理资源...")
+    print("PSOLA 实时变声已停止")
+    print("=" * 50)
+    sys.exit(0)
