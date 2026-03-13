@@ -1,7 +1,7 @@
 import numpy as np
 import sounddevice as sd
 import sys
-
+from Project.src.dsp.utils.f0 import estimate_f0
 
 class RealtimePSOLA:
 
@@ -33,7 +33,7 @@ class RealtimePSOLA:
 
         frame = self._get_recent_frame(2048)
 
-        f0 = self._estimate_f0(frame)
+        f0 = estimate_f0(frame, self.fs)
 
         if f0 is not None:
             self.prev_f0 = 0.9 * self.prev_f0 + 0.1 * f0
@@ -103,30 +103,6 @@ class RealtimePSOLA:
         part2 = self.buffer[:self.write_ptr]
 
         return np.concatenate([part1, part2])
-
-    # ==========================
-    # 自相关 F0
-    # ==========================
-    def _estimate_f0(self, frame, fmin=80, fmax=400):
-
-        frame = frame - np.mean(frame)
-
-        energy = np.sqrt(np.mean(frame ** 2))
-        if energy < 1e-4:
-            return None
-
-        autocorr = np.correlate(frame, frame, mode='full')
-        autocorr = autocorr[len(autocorr) // 2:]
-
-        min_lag = int(self.fs / fmax)
-        max_lag = int(self.fs / fmin)
-
-        if max_lag >= len(autocorr):
-            return None
-
-        lag = np.argmax(autocorr[min_lag:max_lag]) + min_lag
-
-        return self.fs / lag
 
 # ==============================
 # 实时音频
