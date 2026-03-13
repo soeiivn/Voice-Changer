@@ -1,12 +1,9 @@
-import time
 import numpy as np
-import sounddevice as sd
 
 class EarlyReflection:
-
-    def __init__(self, fs):
-
+    def __init__(self, fs, verbose=False):
         self.fs = fs
+        self.verbose = verbose
 
         # 反射时间 (ms)
         delays_ms = [7, 11, 17, 23]
@@ -24,20 +21,32 @@ class EarlyReflection:
 
         self.ptr = 0
 
+        if self.verbose:
+            print(f"  ├─ 早期反射: {len(delays_ms)}条反射路径")
+            for i, (d, g) in enumerate(zip(delays_ms, self.gains)):
+                print(f"  │  ├─ 路径{i + 1}: {d}ms, 增益{g}")
+            print(f"  └─ 最大延迟: {self.max_delay}样本 ({delays_ms[-1]}ms)")
+
+    # ==========================
+    # 主处理函数
+    # ==========================
+    def process(self, input_block):
+        return self.process_block(input_block)
+
+    # ==========================
+    # 原处理函数（保留向后兼容）
+    # ==========================
     def process_block(self, input_block):
 
         output = np.zeros_like(input_block)
 
         for i in range(len(input_block)):
-
             x = input_block[i]
-
             y = x
 
             # 多路径反射
             for delay, gain in zip(self.delays, self.gains):
                 read_ptr = (self.ptr - delay) % len(self.buffer)
-
                 y += gain * self.buffer[read_ptr]
 
             output[i] = y
@@ -50,51 +59,75 @@ class EarlyReflection:
 
         return output
 
+# ==========================================
+# 独立测试
+# ==========================================
+if __name__ == "__main__":
+    import sys
+    import os
+    import time
 
-fs = 16000
-block_size = 1024
-early_reflect = EarlyReflection(fs)
+    # 获取项目根目录
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(current_dir))))
 
+    # 添加项目根目录到路径
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
 
-def callback(indata, outdata, frames, time, status):
-    if status:
-        print(f"Status: {status}")
-    input_block = indata[:, 0]
-    processed = early_reflect.process_block(input_block)
-    outdata[:, 0] = processed
+    # 导入 AudioStream
+    try:
+        from Project.src.audio.stream import AudioStream
+    except ImportError as e:
+        print(f"❌ 导入 AudioStream 失败: {e}")
+        print(f"当前 sys.path: {sys.path}")
+        sys.exit(1)
 
-print("🎤 Early Reflection Start")
-print("按 Ctrl+F2 停止程序...")
-print("=" * 40)
+    # 测试参数
+    fs = 16000
+    block_size = 1024
 
-try:
-    # 创建并启动音频流
-    stream = sd.Stream(
-        samplerate=fs,
-        blocksize=block_size,
-        channels=1,
-        dtype='float32',
-        callback=callback
-    )
+    # 创建效果器
+    effect = EarlyReflection(fs, verbose=True)
 
-    with stream:
-        print("音频流已启动，正在处理...")
+    print("=" * 60)
+    print("🎤 Early Reflection 早期反射（独立测试模式）")
+    print(f"📊 参数设置:")
+    print(f"   ├─ 采样率: {fs}Hz")
+    print(f"   ├─ 块大小: {block_size}")
+    print(f"   ├─ 反射路径: 7ms(0.6), 11ms(0.5), 17ms(0.4), 23ms(0.3)")
+    print(f"   └─ 缓冲大小: {effect.max_delay + 1}样本")
+    print("=" * 60)
+    print("⌨️  按 Ctrl+f2 停止程序")
+    print("-" * 60)
 
-        # 无限循环，直到被中断
+    # 创建音频流
+    try:
+        stream = AudioStream(
+            fs=fs,
+            block_size=block_size,
+            processor=effect
+        )
+    except Exception as e:
+        print(f"❌ 创建音频流失败: {e}")
+        sys.exit(1)
+
+    try:
+        print("▶️ 音频流已启动，正在处理...")
+        stream.start()
+
+        counter = 0
         while True:
-            time.sleep(0.1)  # 短暂睡眠，让CPU可以响应中断
+            time.sleep(1)
+            counter += 1
+            if counter % 5 == 0:
+                print(f"⏱️ 运行中... {counter}秒")
 
-except KeyboardInterrupt:
-    # 捕获 Ctrl+F2
-    print("\n👋 检测到中断信号，正在停止程序...")
-
-except Exception as e:
-    print(f"\n❌ 发生错误: {e}")
-
-finally:
-    # 确保资源被释放
-    print("正在关闭音频流...")
-    if 'stream' in locals():
-        stream.stop()
-        stream.close()
-    print("程序已停止")
+    except KeyboardInterrupt:
+        print("\n👋 检测到中断信号，正在停止程序...")
+    except Exception as e:
+        print(f"\n❌ 运行时错误: {e}")
+    finally:
+        print("\n" + "=" * 60)
+        print("🏁 Early Reflection 早期反射已停止")
+        print("=" * 60)

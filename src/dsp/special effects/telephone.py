@@ -1,15 +1,14 @@
 import numpy as np
-import sounddevice as sd
 from scipy.signal import butter, lfilter
-import sys
 
 # ==========================================
 # Telephone Effect
 # Bandpass + Soft Clipping
 # ==========================================
 class TelephoneEffect:
-    def __init__(self, fs):
+    def __init__(self, fs, verbose=False):
         self.fs = fs
+        self.verbose = verbose
 
         # 电话带宽
         low = 300
@@ -28,6 +27,10 @@ class TelephoneEffect:
         # 软削波阈值
         self.threshold = 0.8
 
+        if self.verbose:
+            print(f"  ├─ 电话音效: 带通 {low}-{high}Hz")
+            print(f"  └─ 软削波: tanh(2x)")
+
     # ===============================
     # 软削波
     # ===============================
@@ -36,6 +39,12 @@ class TelephoneEffect:
 
     # ===============================
     # 主处理函数
+    # ===============================
+    def process(self, input_block):
+        return self.process_block(input_block)
+
+    # ===============================
+    # 原处理函数（保留向后兼容）
     # ===============================
     def process_block(self, input_block):
         # 带通滤波
@@ -46,56 +55,75 @@ class TelephoneEffect:
 
         return distorted
 
-
 # ==========================================
-# 实时音频
+# 独立测试
 # ==========================================
+if __name__ == "__main__":
+    import sys
+    import os
+    import time
 
-fs = 16000
-block_size = 1024
+    # 获取项目根目录
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(current_dir))))
 
-effect = TelephoneEffect(fs)
+    # 添加项目根目录到路径
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
 
-def callback(indata, outdata, frames, time, status):
-    if status:
-        print(f"Status: {status}")
+    # 导入 AudioStream
+    try:
+        from Project.src.audio.stream import AudioStream
+    except ImportError as e:
+        print(f"❌ 导入 AudioStream 失败: {e}")
+        print(f"当前 sys.path: {sys.path}")
+        sys.exit(1)
+
+    # 测试参数
+    fs = 16000
+    block_size = 1024
+
+    # 创建效果器
+    effect = TelephoneEffect(fs, verbose=True)
+
+    print("=" * 60)
+    print("☎ Telephone Effect 电话音效（独立测试模式）")
+    print(f"📊 参数设置:")
+    print(f"   ├─ 采样率: {fs}Hz")
+    print(f"   ├─ 块大小: {block_size}")
+    print(f"   ├─ 带通滤波: 300-3400Hz")
+    print(f"   └─ 软削波: tanh(2x)")
+    print("=" * 60)
+    print("⌨️  按 Ctrl+f2 停止程序")
+    print("-" * 60)
+
+    # 创建音频流
+    try:
+        stream = AudioStream(
+            fs=fs,
+            block_size=block_size,
+            processor=effect  # effect 现在有 process 方法
+        )
+    except Exception as e:
+        print(f"❌ 创建音频流失败: {e}")
+        sys.exit(1)
 
     try:
-        input_block = indata[:, 0]
-        processed = effect.process_block(input_block)
-        outdata[:] = processed.reshape(-1, 1)
-    except Exception as e:
-        print(f"处理错误: {e}")
-        # 出错时输出原始音频（安全模式）
-        outdata[:] = indata
+        print("▶️ 音频流已启动，正在处理...")
+        stream.start()
 
-
-print("=" * 50)
-print("☎ Telephone Effect 电话效果启动")
-print(f"带宽: 300Hz - 3400Hz (模拟电话音质)")
-print("按 Ctrl+F2 停止程序...")
-print("=" * 50)
-
-try:
-    with sd.Stream(
-            samplerate=fs,
-            blocksize=block_size,
-            channels=1,
-            dtype='float32',
-            callback=callback):
-
-        print("音频流已启动，正在处理...")
-
+        counter = 0
         while True:
-            sd.sleep(1000)
+            time.sleep(1)
+            counter += 1
+            if counter % 5 == 0:
+                print(f"⏱️ 运行中... {counter}秒")
 
-except KeyboardInterrupt:
-    print("\n👋 检测到中断信号，正在停止程序...")
-
-except Exception as e:
-    print(f"\n❌ 发生错误: {e}")
-
-finally:
-    print("Telephone Effect 电话效果已停止")
-    print("=" * 50)
-    sys.exit(0)
+    except KeyboardInterrupt:
+        print("\n👋 检测到中断信号，正在停止程序...")
+    except Exception as e:
+        print(f"\n❌ 运行时错误: {e}")
+    finally:
+        print("\n" + "=" * 60)
+        print("🏁 Telephone Effect 电话音效已停止")
+        print("=" * 60)

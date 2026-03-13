@@ -1,14 +1,15 @@
 import numpy as np
-import sounddevice as sd
-import sys
 from Project.src.dsp.utils.f0 import estimate_f0
+from Project.src.dsp.utils.window import hann_window, apply_window
+from Project.src.dsp.utils.overlap_add import overlap_add
 
 class RealtimePSOLA:
 
-    def __init__(self, fs, semitone=0):
-
+    def __init__(self, fs, semitone=0, verbose=False):
         self.fs = fs
+        self.semitone = semitone
         self.pitch_ratio = 2 ** (semitone / 12)
+        self.verbose = verbose
 
         # 分析缓冲
         self.buffer_size = 4096
@@ -19,8 +20,17 @@ class RealtimePSOLA:
         self.prev_f0 = 150
         self.T = int(fs / self.prev_f0)
 
+        if self.verbose:
+            print(f"  ├─ PSOLA音高变换: {self.pitch_ratio:.2f}倍 ({semitone}半音)")
+
     # ==========================
     # 主处理函数
+    # ==========================
+    def process(self, input_block):
+        return self.process_block(input_block)
+
+    # ==========================
+    # 原处理函数（保留向后兼容）
     # ==========================
     def process_block(self, input_block):
 
@@ -66,15 +76,18 @@ class RealtimePSOLA:
 
             segment = frame[start:end].copy()
 
-            window = np.hanning(len(segment))
-            segment *= window
+            window = hann_window(len(segment))
+            segment = apply_window(segment, window)
 
             seg_len = len(segment)
 
             if out_ptr + seg_len > N:
                 break
 
-            output[out_ptr:out_ptr + seg_len] += segment
+            success = overlap_add(output, segment, out_ptr)
+
+            if not success:
+                break
 
             out_ptr += new_spacing
             mark_index += 1
@@ -104,70 +117,76 @@ class RealtimePSOLA:
 
         return np.concatenate([part1, part2])
 
-# ==============================
-# 实时音频
-# ==============================
+# ==========================================
+# 独立测试
+# ==========================================
+if __name__ == "__main__":
+    import sys
+    import os
+    import time
 
-fs = 16000
-block_size = 1024
+    # 获取项目根目录
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
 
-psola = RealtimePSOLA(fs, semitone=4)
+    # 添加项目根目录到路径
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
 
-def callback(indata, outdata, frames, time, status):
-    if status:
-        print(f"Status: {status}")
+    # 导入 AudioStream
+    try:
+        from src.audio.stream import AudioStream
+    except ImportError as e:
+        print(f"❌ 导入 AudioStream 失败: {e}")
+        print(f"当前 sys.path: {sys.path}")
+        sys.exit(1)
+
+    # 测试参数
+    fs = 16000
+    block_size = 1024
+    semitone = 4  # 升高4半音
+
+    # 创建效果器
+    effect = RealtimePSOLA(fs, semitone=semitone, verbose=True)
+
+    print("=" * 60)
+    print("🎵 PSOLA 音高变换（独立测试模式）")
+    print(f"📊 参数设置:")
+    print(f"   ├─ 采样率: {fs}Hz")
+    print(f"   ├─ 块大小: {block_size}")
+    print(f"   ├─ 半音数: {semitone}")
+    print(f"   └─ 音高比: {effect.pitch_ratio:.2f}倍")
+    print("=" * 60)
+    print("⌨️  按 Ctrl+f2 停止程序")
+    print("-" * 60)
+
+    # 创建音频流
+    try:
+        stream = AudioStream(
+            fs=fs,
+            block_size=block_size,
+            processor=effect  # effect 现在有 process 方法
+        )
+    except Exception as e:
+        print(f"❌ 创建音频流失败: {e}")
+        sys.exit(1)
 
     try:
-        input_block = indata[:, 0]
-        processed = psola.process_block(input_block)
-        outdata[:] = processed.reshape(-1, 1)
-    except Exception as e:
-        print(f"处理错误: {e}")
-        # 出错时输出原始音频（安全模式）
-        outdata[:] = indata
+        print("▶️ 音频流已启动，正在处理...")
+        stream.start()
 
-
-print("=" * 50)
-print("PSOLA 实时变声启动")
-print(f"设置: {psola.pitch_ratio:.2f} 倍音高 ({psola.pitch_ratio * 100:.0f}%)")
-print("按 Ctrl+F2 停止程序...")
-print("=" * 50)
-
-try:
-    with sd.Stream(
-            samplerate=fs,
-            blocksize=block_size,
-            channels=1,
-            dtype='float32',
-            callback=callback):
-
-        print("音频流已启动，正在处理...")
-        print("-" * 50)
-
-        # 添加计数器显示运行时间
-        import time
-
-        start_time = time.time()
         counter = 0
-
         while True:
-            sd.sleep(1000)
+            time.sleep(1)
             counter += 1
-            if counter % 5 == 0:  # 每5秒显示一次状态
-                elapsed = time.time() - start_time
-                print(f"⏱️ 运行中... {elapsed:.0f}秒")
+            if counter % 5 == 0:
+                print(f"⏱️ 运行中... {counter}秒")
 
-except KeyboardInterrupt:
-    print("\n👋 检测到中断信号，正在停止程序...")
-
-except Exception as e:
-    print(f"\n❌ 发生错误: {e}")
-    import traceback
-
-    traceback.print_exc()
-
-finally:
-    print("正在清理资源...")
-    print("PSOLA 实时变声已停止")
-    print("=" * 50)
-    sys.exit(0)
+    except KeyboardInterrupt:
+        print("\n👋 检测到中断信号，正在停止程序...")
+    except Exception as e:
+        print(f"\n❌ 运行时错误: {e}")
+    finally:
+        print("\n" + "=" * 60)
+        print("🏁 PSOLA 音高变换已停止")
+        print("=" * 60)

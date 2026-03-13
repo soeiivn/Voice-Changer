@@ -1,15 +1,14 @@
 import numpy as np
-import sounddevice as sd
 from scipy.signal import butter, lfilter
-import sys
 
 # ==========================================
 # Robot Voice Effect
 # ==========================================
 class RobotEffect:
-    def __init__(self, fs, carrier_freq=200):
+    def __init__(self, fs, carrier_freq=200, verbose=False):
         self.fs = fs
         self.carrier_freq = carrier_freq
+        self.verbose = verbose
 
         # 相位累加器（生成连续正弦波）
         self.phase = 0
@@ -23,6 +22,10 @@ class RobotEffect:
             cutoff / nyq,
             btype='low'
         )
+
+        if self.verbose:
+            print(f"  ├─ 机器人音效: 载波 {carrier_freq}Hz")
+            print(f"  └─ 低通滤波: {cutoff}Hz")
 
     # ===============================
     # 生成载波
@@ -40,6 +43,12 @@ class RobotEffect:
     # ===============================
     # 主处理函数
     # ===============================
+    def process(self, input_block):
+        return self.process_block(input_block)
+
+    # ===============================
+    # 原处理函数（保留向后兼容）
+    # ===============================
     def process_block(self, input_block):
         # 生成调制载波
         carrier = self.generate_carrier(len(input_block))
@@ -53,53 +62,75 @@ class RobotEffect:
         return robot_voice
 
 # ==========================================
-# 实时音频
+# 独立测试
 # ==========================================
+if __name__ == "__main__":
+    import sys
+    import os
+    import time
 
-fs = 16000
-block_size = 1024
+    # 获取项目根目录
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(current_dir))))
 
-effect = RobotEffect(fs, carrier_freq=200)
+    # 添加项目根目录到路径
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
 
-def callback(indata, outdata, frames, time, status):
-    if status:
-        print(f"Status: {status}")
+    # 导入 AudioStream
+    try:
+        from Project.src.audio.stream import AudioStream
+    except ImportError as e:
+        print(f"❌ 导入 AudioStream 失败: {e}")
+        print(f"当前 sys.path: {sys.path}")
+        sys.exit(1)
+
+    # 测试参数
+    fs = 16000
+    block_size = 1024
+    carrier_freq = 200
+
+    # 创建效果器
+    effect = RobotEffect(fs, carrier_freq=carrier_freq, verbose=True)
+
+    print("=" * 60)
+    print("🤖 Robot Voice 机器人音效（独立测试模式）")
+    print(f"📊 参数设置:")
+    print(f"   ├─ 采样率: {fs}Hz")
+    print(f"   ├─ 块大小: {block_size}")
+    print(f"   ├─ 载波频率: {carrier_freq}Hz")
+    print(f"   └─ 低通滤波: 1000Hz")
+    print("=" * 60)
+    print("⌨️  按 Ctrl+f2 停止程序")
+    print("-" * 60)
+
+    # 创建音频流
+    try:
+        stream = AudioStream(
+            fs=fs,
+            block_size=block_size,
+            processor=effect  # effect 现在有 process 方法
+        )
+    except Exception as e:
+        print(f"❌ 创建音频流失败: {e}")
+        sys.exit(1)
 
     try:
-        input_block = indata[:, 0]
-        processed = effect.process_block(input_block)
-        outdata[:] = processed.reshape(-1, 1)
-    except Exception as e:
-        print(f"处理错误: {e}")
-        # 出错时输出原始音频（安全模式）
-        outdata[:] = indata
+        print("▶️ 音频流已启动，正在处理...")
+        stream.start()
 
-print("=" * 50)
-print("🤖 Robot Voice 机器人音效启动")
-print(f"载波频率: {effect.carrier_freq}Hz")
-print("按 Ctrl+F2 停止程序...")
-print("=" * 50)
-
-try:
-    with sd.Stream(
-            samplerate=fs,
-            blocksize=block_size,
-            channels=1,
-            dtype='float32',
-            callback=callback):
-
-        print("音频流已启动，正在处理...")
-
+        counter = 0
         while True:
-            sd.sleep(1000)
+            time.sleep(1)
+            counter += 1
+            if counter % 5 == 0:
+                print(f"⏱️ 运行中... {counter}秒")
 
-except KeyboardInterrupt:
-    print("\n👋 检测到中断信号，正在停止程序...")
-
-except Exception as e:
-    print(f"\n❌ 发生错误: {e}")
-
-finally:
-    print("Robot Voice 机器人音效已停止")
-    print("=" * 50)
-    sys.exit(0)
+    except KeyboardInterrupt:
+        print("\n👋 检测到中断信号，正在停止程序...")
+    except Exception as e:
+        print(f"\n❌ 运行时错误: {e}")
+    finally:
+        print("\n" + "=" * 60)
+        print("🏁 Robot Voice 机器人音效已停止")
+        print("=" * 60)
