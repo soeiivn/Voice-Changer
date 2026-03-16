@@ -1,34 +1,38 @@
 import numpy as np
+from scipy.signal import lfilter
 
-class LPCAnalysis:
+class LPCResidual:
+
     def __init__(self, order=16, verbose=False):
 
         self.order = order
         self.verbose = verbose
 
-        if self.verbose:
-            print(f"LPC Analysis 初始化: 阶数 = {order}")
+        if verbose:
+            print(f"LPC Residual 初始化: order={order}")
 
     # ==========================
-    # 主处理函数
+    # 主处理
     # ==========================
     def process(self, x):
 
         x = self._preprocess(x)
 
+        # LPC系数
         a = self.compute_lpc(x)
 
-        return a
+        # 残差
+        residual = self.compute_residual(x, a)
+
+        return residual
 
     # ==========================
     # 预处理
     # ==========================
     def _preprocess(self, x):
 
-        # 去直流
         x = x - np.mean(x)
 
-        # 归一化
         max_val = np.max(np.abs(x))
         if max_val > 1e-6:
             x = x / max_val
@@ -42,16 +46,14 @@ class LPCAnalysis:
 
         p = self.order
 
-        # Step 1 自相关
         r = self.autocorrelation(x, p)
 
-        # Step 2 Levinson-Durbin
         a = self.levinson_durbin(r, p)
 
         return a
 
     # ==========================
-    # 自相关函数
+    # 自相关
     # ==========================
     def autocorrelation(self, x, p):
 
@@ -66,7 +68,7 @@ class LPCAnalysis:
         return r
 
     # ==========================
-    # Levinson-Durbin算法
+    # Levinson-Durbin
     # ==========================
     def levinson_durbin(self, r, p):
 
@@ -103,9 +105,17 @@ class LPCAnalysis:
 
         return a
 
+    # ==========================
+    # 残差提取
+    # ==========================
+    def compute_residual(self, x, a):
+
+        residual = lfilter(a, [1.0], x)
+
+        return residual
 
 # ==========================
-# 独立测试
+# 测试
 # ==========================
 if __name__ == "__main__":
 
@@ -114,30 +124,23 @@ if __name__ == "__main__":
     fs = 16000
     block_size = 1024
 
-    lpc = LPCAnalysis(order=16, verbose=True)
+    lpc = LPCResidual(order=16, verbose=True)
 
-    print("=" * 50)
-    print("LPC Analysis Test")
-    print("=" * 50)
-
-    def callback(indata, outdata, frames, time_info, status):
+    def callback(indata, outdata, frames, time, status):
 
         x = indata[:, 0]
 
-        a = lpc.process(x)
+        residual = lpc.process(x)
 
-        # 打印前几个系数
-        print("LPC:", np.round(a[:5], 3))
-
-        outdata[:] = indata
+        outdata[:] = residual.reshape(-1, 1)
 
     with sd.Stream(
         samplerate=fs,
         blocksize=block_size,
         channels=1,
-        callback=callback,
+        callback=callback
     ):
 
-        print("音频流启动...")
+        print("LPC Residual Test Running...")
         while True:
             sd.sleep(1000)
