@@ -3,6 +3,7 @@ import sounddevice as sd
 import sys
 import time
 import os
+import pyworld as pw
 
 class PSOLAPitchShifter:
     # ==========================
@@ -24,6 +25,9 @@ class PSOLAPitchShifter:
         self.fmin = 80
         self.fmax = 400
 
+        self.f0_floor = 80
+        self.f0_ceil = 400
+
     # ==========================
     # 设置音色（前端调用）
     # ==========================
@@ -41,22 +45,17 @@ class PSOLAPitchShifter:
         self.pitch_ratio = 2 ** (semitone / 12.0)
 
     def _estimate_f0(self, frame: np.ndarray):
-        frame = frame - np.mean(frame)
-        energy = np.sqrt(np.mean(frame ** 2))
-        if energy < 1e-4:
+        """用 WORLD Harvest求单值 F0"""
+        if len(frame) < 256:
             return None
 
-        autocorr = np.correlate(frame, frame, mode='full')
-        autocorr = autocorr[len(autocorr) // 2:]
+        x = frame.astype(np.float64)
+        f0, _ = pw.harvest(x, self.fs, f0_floor=self.f0_floor, f0_ceil=self.fmax)
 
-        min_lag = int(self.fs / self.fmax)
-        max_lag = int(self.fs / self.fmin)
-
-        if max_lag >= len(autocorr):
+        voiced_f0 = f0[f0 > 0]
+        if len(voiced_f0) == 0:
             return None
-
-        lag = np.argmax(autocorr[min_lag:max_lag]) + min_lag
-        return self.fs / lag
+        return np.median(voiced_f0)
 
     def process_block(self, input_block: np.ndarray) -> np.ndarray:
 
@@ -175,7 +174,6 @@ if __name__ == "__main__":
     print("   (运行时可输入 1-6 切换音色)")
     print("-" * 60)
 
-
     # 回调函数
     def callback(indata, outdata, frames, time, status):
         if status:
@@ -188,7 +186,6 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"处理错误: {e}")
             outdata[:] = indata  # 安全模式
-
 
     # 启动音频流
     try:
