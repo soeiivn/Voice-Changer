@@ -1,4 +1,7 @@
 cffi==2.0.0
-numpy==2.2.6
 pycparser==2.23
+pyworld==0.3.5
+scipy==1.15.3
 sounddevice==0.5.3
+soundfile==0.13.1
+spicy==0.16.0

@@ -1,192 +1,249 @@
 import numpy as np
-from Project.src.dsp.utils.f0 import estimate_f0
-from Project.src.dsp.utils.window import hann_window, apply_window
-from Project.src.dsp.utils.overlap_add import overlap_add
+import sounddevice as sd
+import sys
+import time
+import os
 
-class RealtimePSOLA:
+class PSOLAPitchShifter:
+    # ==========================
+    # 六音色预设（只控制音高）
+    # ==========================
+    PRESETS = {
+        "doll": 10,  # 娃娃音
+        "girl": 6,  # 少女音
+        "lady": 3,  # 御姐音
+        "boy": 7,  # 正太音
+        "deep": -3,  # 磁性音
+        "smoky": -5,  # 烟嗓（只降音高）
+    }
 
-    def __init__(self, fs, semitone=0, verbose=False):
+    def __init__(self, fs=44100, semitone=0.0):
         self.fs = fs
+        self.set_semitone(semitone)
+
+        self.fmin = 80
+        self.fmax = 400
+
+    # ==========================
+    # 设置音色（前端调用）
+    # ==========================
+    def set_mode(self, mode: str):
+        if mode in self.PRESETS:
+            self.set_semitone(self.PRESETS[mode])
+            return True
+        else:
+            print(f"未知模式: {mode}")
+            return False
+
+    def set_semitone(self, semitone: float):
+        """实时调整半音"""
         self.semitone = semitone
-        self.pitch_ratio = 2 ** (semitone / 12)
-        self.verbose = verbose
+        self.pitch_ratio = 2 ** (semitone / 12.0)
 
-        # 分析缓冲
-        self.buffer_size = 4096
-        self.buffer = np.zeros(self.buffer_size)
-        self.write_ptr = 0
+    def _estimate_f0(self, frame: np.ndarray):
+        frame = frame - np.mean(frame)
+        energy = np.sqrt(np.mean(frame ** 2))
+        if energy < 1e-4:
+            return None
 
-        # 上次周期
-        self.prev_f0 = 150
-        self.T = int(fs / self.prev_f0)
+        autocorr = np.correlate(frame, frame, mode='full')
+        autocorr = autocorr[len(autocorr) // 2:]
 
-        if self.verbose:
-            print(f"  ├─ PSOLA音高变换: {self.pitch_ratio:.2f}倍 ({semitone}半音)")
+        min_lag = int(self.fs / self.fmax)
+        max_lag = int(self.fs / self.fmin)
 
-    # ==========================
-    # 主处理函数
-    # ==========================
-    def process(self, input_block):
-        return self.process_block(input_block)
+        if max_lag >= len(autocorr):
+            return None
 
-    # ==========================
-    # 原处理函数（保留向后兼容）
-    # ==========================
-    def process_block(self, input_block):
+        lag = np.argmax(autocorr[min_lag:max_lag]) + min_lag
+        return self.fs / lag
 
-        N = len(input_block)
+    def process_block(self, input_block: np.ndarray) -> np.ndarray:
 
-        # 写入环形缓冲
-        for i in range(N):
-            self.buffer[self.write_ptr] = input_block[i]
-            self.write_ptr = (self.write_ptr + 1) % self.buffer_size
+        frame = input_block.flatten().copy()
+        if len(frame) < 256:
+            return frame
 
-        frame = self._get_recent_frame(2048)
+        f0 = self._estimate_f0(frame)
+        if f0 is None or f0 < self.fmin or f0 > self.fmax:
+            return frame
 
-        f0 = estimate_f0(frame, self.fs)
+        T = int(self.fs / f0)
+        if T < 10 or 2 * T > len(frame):
+            return frame
 
-        if f0 is not None:
-            self.prev_f0 = 0.9 * self.prev_f0 + 0.1 * f0
-
-        T = int(self.fs / self.prev_f0)
-        T = np.clip(T, 40, 400)
-
-        # pitch marks
         marks = np.arange(T, len(frame) - T, T)
-
         if len(marks) < 2:
-            return input_block
-
-        output = np.zeros(N)
-        out_ptr = 0
-        mark_index = 0
+            return frame
 
         new_spacing = int(T / self.pitch_ratio)
+        new_spacing = max(1, new_spacing)
 
-        while out_ptr < N and mark_index < len(marks):
+        output = np.zeros(len(frame))
+        out_ptr = 0
+        mark_index = 0
+        last_segment = None
+
+        while mark_index < len(marks) and out_ptr < len(frame):
 
             m = int(marks[mark_index])
 
             start = m - T
             end = m + T
-
             if start < 0 or end > len(frame):
                 mark_index += 1
                 continue
 
             segment = frame[start:end].copy()
-
-            window = hann_window(len(segment))
-            segment = apply_window(segment, window)
+            window = np.hanning(len(segment))
+            segment *= window
 
             seg_len = len(segment)
 
-            if out_ptr + seg_len > N:
-                break
+            add_len = min(seg_len, len(output) - out_ptr)
+            output[out_ptr:out_ptr + add_len] += segment[:add_len]
 
-            success = overlap_add(output, segment, out_ptr)
-
-            if not success:
-                break
-
+            last_segment = segment.copy()
             out_ptr += new_spacing
             mark_index += 1
 
-        # 音量匹配
-        in_energy = np.sqrt(np.mean(input_block ** 2))
-        out_energy = np.sqrt(np.mean(output ** 2))
+        if out_ptr < len(output) and last_segment is not None:
+            while out_ptr < len(output):
+                add_len = min(len(last_segment), len(output) - out_ptr)
+                output[out_ptr:out_ptr + add_len] += last_segment[:add_len]
+                out_ptr += new_spacing
 
-        if out_energy > 1e-6:
-            output *= in_energy / out_energy
+        output *= 0.8
 
-        if np.max(np.abs(output)) < 1e-6:
-            return input_block
-
-        return output
-
-    # ==========================
-    # 最近帧
-    # ==========================
-    def _get_recent_frame(self, length):
-
-        if self.write_ptr - length >= 0:
-            return self.buffer[self.write_ptr - length:self.write_ptr]
-
-        part1 = self.buffer[self.write_ptr - length:]
-        part2 = self.buffer[:self.write_ptr]
-
-        return np.concatenate([part1, part2])
+        return output.reshape(input_block.shape)
 
 # ==========================================
 # 独立测试
 # ==========================================
 if __name__ == "__main__":
-    import sys
-    import os
-    import time
-
-    # 获取项目根目录
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
-
-    # 添加项目根目录到路径
-    if project_root not in sys.path:
-        sys.path.insert(0, project_root)
-
-    # 导入 AudioStream
-    try:
-        from src.audio.stream import AudioStream
-    except ImportError as e:
-        print(f"❌ 导入 AudioStream 失败: {e}")
-        print(f"当前 sys.path: {sys.path}")
-        sys.exit(1)
 
     # 测试参数
-    fs = 16000
-    block_size = 1024
-    semitone = 4  # 升高4半音
+    fs = 16000  # 采样率
+    block_size = 1024  # 块大小
 
-    # 创建效果器
-    effect = RealtimePSOLA(fs, semitone=semitone, verbose=True)
+    # 可用的音色模式列表
+    available_modes = list(PSOLAPitchShifter.PRESETS.keys())
 
     print("=" * 60)
-    print("🎵 PSOLA 音高变换（独立测试模式）")
+    print("🎵 PSOLA 六音色变声系统")
+    print("=" * 60)
+    print("📋 可选音色模式:")
+    for i, mode in enumerate(available_modes):
+        semitone = PSOLAPitchShifter.PRESETS[mode]
+        semitone_str = f"+{semitone}" if semitone > 0 else str(semitone)
+        print(f"   {i + 1}. {mode:6s} ({semitone_str} 半音)")
+    print("-" * 60)
+
+    # 选择模式
+    while True:
+        try:
+            choice = input("请选择音色模式 (1-6) [默认: 2-girl]: ").strip()
+            if choice == "":
+                mode = "girl"
+                break
+            idx = int(choice) - 1
+            if 0 <= idx < len(available_modes):
+                mode = available_modes[idx]
+                break
+            else:
+                print(f"❌ 请输入 1-{len(available_modes)} 之间的数字")
+        except ValueError:
+            print("❌ 请输入有效数字")
+        except KeyboardInterrupt:
+            print("\n👋 程序退出")
+            sys.exit(0)
+
+    # 创建效果器
+    pitch_shifter = PSOLAPitchShifter(fs=fs)
+    pitch_shifter.set_mode(mode)
+
+    print("\n" + "=" * 60)
+    print(f"🎵 PSOLA 音高变换（独立测试模式）")
     print(f"📊 参数设置:")
     print(f"   ├─ 采样率: {fs}Hz")
     print(f"   ├─ 块大小: {block_size}")
-    print(f"   ├─ 半音数: {semitone}")
-    print(f"   └─ 音高比: {effect.pitch_ratio:.2f}倍")
+    print(f"   ├─ 音色模式: {mode}")
+    print(f"   ├─ 半音数: {PSOLAPitchShifter.PRESETS[mode]:+d}")
+    print(f"   └─ 音高比: {pitch_shifter.pitch_ratio:.2f}倍")
     print("=" * 60)
-    print("⌨️  按 Ctrl+f2 停止程序")
+    print("⌨️  按 Ctrl+F2 或 Ctrl+C 停止程序")
+    print("   (运行时可输入 1-6 切换音色)")
     print("-" * 60)
 
-    # 创建音频流
-    try:
-        stream = AudioStream(
-            fs=fs,
-            block_size=block_size,
-            processor=effect  # effect 现在有 process 方法
-        )
-    except Exception as e:
-        print(f"❌ 创建音频流失败: {e}")
-        sys.exit(1)
 
-    try:
-        print("▶️ 音频流已启动，正在处理...")
-        stream.start()
+    # 回调函数
+    def callback(indata, outdata, frames, time, status):
+        if status:
+            print(f"Status: {status}")
 
-        counter = 0
-        while True:
-            time.sleep(1)
-            counter += 1
-            if counter % 5 == 0:
-                print(f"⏱️ 运行中... {counter}秒")
+        try:
+            # 处理音频
+            processed = pitch_shifter.process_block(indata[:, 0])
+            outdata[:] = processed.reshape(-1, 1)
+        except Exception as e:
+            print(f"处理错误: {e}")
+            outdata[:] = indata  # 安全模式
+
+
+    # 启动音频流
+    try:
+        with sd.Stream(
+                samplerate=fs,
+                blocksize=block_size,
+                channels=1,
+                dtype='float32',
+                callback=callback
+        ):
+            print("▶️ 音频流已启动，正在处理...")
+            print("💬 说话吧！")
+
+            # 运行状态显示和模式切换
+            counter = 0
+            last_mode = mode
+
+            while True:
+                time.sleep(0.1)  # 更短的睡眠，提高响应性
+
+                # 检查键盘输入（Windows非阻塞）
+                if os.name == 'nt':  # Windows
+                    import msvcrt
+
+                    if msvcrt.kbhit():
+                        key = msvcrt.getch().decode('utf-8', errors='ignore')
+                        if key in '123456':
+                            new_mode = available_modes[int(key) - 1]
+                            if new_mode != last_mode:
+                                pitch_shifter.set_mode(new_mode)
+                                semitone = PSOLAPitchShifter.PRESETS[new_mode]
+                                semitone_str = f"+{semitone}" if semitone > 0 else str(semitone)
+                                print(f"\n🔄 切换到音色: {new_mode} ({semitone_str} 半音)")
+                                last_mode = new_mode
+                        elif key.lower() == 'q':
+                            print("\n👋 检测到 'q' 键，正在停止程序...")
+                            break
+
+                # 每5秒显示一次状态
+                counter += 1
+                if counter % 50 == 0:  # 0.1 * 50 = 5秒
+                    elapsed = counter / 10
+                    semitone = PSOLAPitchShifter.PRESETS[last_mode]
+                    semitone_str = f"+{semitone}" if semitone > 0 else str(semitone)
+                    print(f"⏱️ 运行中... {elapsed:.0f}秒 [模式: {last_mode} ({semitone_str})]")
 
     except KeyboardInterrupt:
         print("\n👋 检测到中断信号，正在停止程序...")
     except Exception as e:
         print(f"\n❌ 运行时错误: {e}")
+        import traceback
+
+        traceback.print_exc()
     finally:
         print("\n" + "=" * 60)
         print("🏁 PSOLA 音高变换已停止")
         print("=" * 60)
+        sys.exit(0)
