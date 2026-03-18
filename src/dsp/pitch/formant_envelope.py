@@ -26,7 +26,8 @@ class FormantEnvelope:
         freqs = np.linspace(0, 1, len(envelope))
 
         # ===== 关键：频率拉伸 =====
-        warped_freqs = freqs / self.shift
+        shift = np.clip(self.shift, 0.8, 1.35)  # ⭐ 限制范围
+        warped_freqs = freqs / shift
         warped_freqs = np.clip(warped_freqs, 0, 1)
 
         # 插值新的 envelope
@@ -35,6 +36,13 @@ class FormantEnvelope:
             warped_freqs,
             envelope
         )
+
+        # ===== 高频抑制 =====
+        freq_axis = np.linspace(0, self.fs / 2, len(new_envelope))
+
+        hf_mask = 1 / (1 + (freq_axis / 4000) ** 2)  # 4kHz以上压制
+
+        new_envelope *= hf_mask
 
         # ===== 重建频谱 =====
         new_mag = new_envelope * detail
@@ -48,6 +56,6 @@ class FormantEnvelope:
 
     def _smooth(self, mag):
         """简单低通平滑（包络）"""
-        kernel_size = 15
+        kernel_size = 41
         kernel = np.ones(kernel_size) / kernel_size
         return np.convolve(mag, kernel, mode='same')

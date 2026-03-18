@@ -13,10 +13,10 @@ class PSOLAPitchShifter:
     # 六音色预设（只控制音高）
     # ==========================
     PRESETS = {
-        "doll":  {"semitone": 10, "formant": 1.4},
-        "girl":  {"semitone": 6,  "formant": 1.3},
+        "doll":  {"semitone": 10, "formant": 1.3},
+        "girl":  {"semitone": 6,  "formant": 1.25},
         "lady":  {"semitone": 3,  "formant": 1.15},
-        "boy":   {"semitone": 7,  "formant": 1.25},
+        "boy":   {"semitone": 5,  "formant": 1.28},
         "deep":  {"semitone": -3, "formant": 0.9},
         "smoky": {"semitone": -5, "formant": 0.85},
     }
