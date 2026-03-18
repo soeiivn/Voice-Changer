@@ -4,18 +4,21 @@ import sys
 import time
 import os
 import pyworld as pw
+from Project.src.dsp.utils.window import hann_window, apply_window
+from Project.src.dsp.utils.overlap_add import overlap_add
+from formant_envelope import FormantEnvelope
 
 class PSOLAPitchShifter:
     # ==========================
     # 六音色预设（只控制音高）
     # ==========================
     PRESETS = {
-        "doll": 10,  # 娃娃音
-        "girl": 6,  # 少女音
-        "lady": 3,  # 御姐音
-        "boy": 7,  # 正太音
-        "deep": -3,  # 磁性音
-        "smoky": -5,  # 烟嗓（只降音高）
+        "doll":  {"semitone": 10, "formant": 1.4},
+        "girl":  {"semitone": 6,  "formant": 1.3},
+        "lady":  {"semitone": 3,  "formant": 1.15},
+        "boy":   {"semitone": 7,  "formant": 1.25},
+        "deep":  {"semitone": -3, "formant": 0.9},
+        "smoky": {"semitone": -5, "formant": 0.85},
     }
 
     def __init__(self, fs=44100, semitone=0.0):
@@ -28,16 +31,19 @@ class PSOLAPitchShifter:
         self.f0_floor = 80
         self.f0_ceil = 400
 
+        self.formant = FormantEnvelope(fs, shift=1.2)
+
     # ==========================
     # 设置音色（前端调用）
     # ==========================
     def set_mode(self, mode: str):
         if mode in self.PRESETS:
-            self.set_semitone(self.PRESETS[mode])
-            return True
-        else:
-            print(f"未知模式: {mode}")
-            return False
+            p = self.PRESETS[mode]
+
+            self.set_semitone(p["semitone"])
+
+            # ⭐ 同步formant
+            self.formant.shift = p["formant"]
 
     def set_semitone(self, semitone: float):
         """实时调整半音"""
@@ -94,13 +100,15 @@ class PSOLAPitchShifter:
                 continue
 
             segment = frame[start:end].copy()
-            window = np.hanning(len(segment))
-            segment *= window
+            window = hann_window(len(segment))
+            segment = apply_window(segment, window)
 
             seg_len = len(segment)
 
             add_len = min(seg_len, len(output) - out_ptr)
-            output[out_ptr:out_ptr + add_len] += segment[:add_len]
+            success = overlap_add(output, segment[:add_len], out_ptr)
+            if not success:
+                break
 
             last_segment = segment.copy()
             out_ptr += new_spacing
@@ -113,6 +121,7 @@ class PSOLAPitchShifter:
                 out_ptr += new_spacing
 
         output *= 0.8
+        output = self.formant.process(output)
 
         return output.reshape(input_block.shape)
 
@@ -133,9 +142,11 @@ if __name__ == "__main__":
     print("=" * 60)
     print("📋 可选音色模式:")
     for i, mode in enumerate(available_modes):
-        semitone = PSOLAPitchShifter.PRESETS[mode]
+        preset = PSOLAPitchShifter.PRESETS[mode]  # 获取预设字典
+        semitone = preset["semitone"]  # 从字典中取出半音值
         semitone_str = f"+{semitone}" if semitone > 0 else str(semitone)
-        print(f"   {i + 1}. {mode:6s} ({semitone_str} 半音)")
+        formant = preset["formant"]
+        print(f"   {i + 1}. {mode:6s} (半音: {semitone_str}, 共振峰: {formant:.2f})")
     print("-" * 60)
 
     # 选择模式
@@ -157,9 +168,14 @@ if __name__ == "__main__":
             print("\n👋 程序退出")
             sys.exit(0)
 
-    # 创建效果器
-    pitch_shifter = PSOLAPitchShifter(fs=fs)
+    # 创建效果器 - 修复：传入正确的参数名
+    pitch_shifter = PSOLAPitchShifter(fs=fs, semitone=0.0)  # 初始半音设为0
     pitch_shifter.set_mode(mode)
+
+    # 获取当前模式的预设值用于显示
+    current_preset = PSOLAPitchShifter.PRESETS[mode]
+    current_semitone = current_preset["semitone"]
+    current_formant = current_preset["formant"]
 
     print("\n" + "=" * 60)
     print(f"🎵 PSOLA 音高变换（独立测试模式）")
@@ -167,7 +183,8 @@ if __name__ == "__main__":
     print(f"   ├─ 采样率: {fs}Hz")
     print(f"   ├─ 块大小: {block_size}")
     print(f"   ├─ 音色模式: {mode}")
-    print(f"   ├─ 半音数: {PSOLAPitchShifter.PRESETS[mode]:+d}")
+    print(f"   ├─ 半音数: {current_semitone:+d}")
+    print(f"   ├─ 共振峰: {current_formant:.2f}")
     print(f"   └─ 音高比: {pitch_shifter.pitch_ratio:.2f}倍")
     print("=" * 60)
     print("⌨️  按 Ctrl+F2 或 Ctrl+C 停止程序")
@@ -216,9 +233,11 @@ if __name__ == "__main__":
                             new_mode = available_modes[int(key) - 1]
                             if new_mode != last_mode:
                                 pitch_shifter.set_mode(new_mode)
-                                semitone = PSOLAPitchShifter.PRESETS[new_mode]
+                                preset = PSOLAPitchShifter.PRESETS[new_mode]
+                                semitone = preset["semitone"]
+                                formant = preset["formant"]
                                 semitone_str = f"+{semitone}" if semitone > 0 else str(semitone)
-                                print(f"\n🔄 切换到音色: {new_mode} ({semitone_str} 半音)")
+                                print(f"\n🔄 切换到音色: {new_mode} (半音: {semitone_str}, 共振峰: {formant:.2f})")
                                 last_mode = new_mode
                         elif key.lower() == 'q':
                             print("\n👋 检测到 'q' 键，正在停止程序...")
@@ -228,9 +247,11 @@ if __name__ == "__main__":
                 counter += 1
                 if counter % 50 == 0:  # 0.1 * 50 = 5秒
                     elapsed = counter / 10
-                    semitone = PSOLAPitchShifter.PRESETS[last_mode]
+                    preset = PSOLAPitchShifter.PRESETS[last_mode]
+                    semitone = preset["semitone"]
+                    formant = preset["formant"]
                     semitone_str = f"+{semitone}" if semitone > 0 else str(semitone)
-                    print(f"⏱️ 运行中... {elapsed:.0f}秒 [模式: {last_mode} ({semitone_str})]")
+                    print(f"⏱️ 运行中... {elapsed:.0f}秒 [模式: {last_mode} (半音: {semitone_str}, 共振峰: {formant:.2f})]")
 
     except KeyboardInterrupt:
         print("\n👋 检测到中断信号，正在停止程序...")
