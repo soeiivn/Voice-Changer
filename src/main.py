@@ -82,6 +82,27 @@ def parse_choices(choice_list, routing: AudioRouting):
         else:
             print(f"⚠️ 无效选项: {choice}")
 
+def prompt_echo_ratio(routing: AudioRouting):
+    while True:
+        raw = input("请输入回声比例（0.0 ~ 0.95，直接回车使用 0.4）: ").strip()
+
+        if raw == "":
+            routing.set_echo_ratio(0.4)
+            print("✅ 已使用默认回声比例: 0.4")
+            return
+
+        try:
+            ratio = float(raw)
+        except ValueError:
+            print("⚠️ 请输入合法数字，例如 0.35")
+            continue
+
+        if 0.0 <= ratio <= 0.95:
+            routing.set_echo_ratio(ratio)
+            print(f"✅ 回声比例已设置为: {ratio}")
+            return
+
+        print("⚠️ 回声比例必须在 0.0 ~ 0.95 之间")
 
 # ==========================================
 # 🎧 运行
@@ -94,7 +115,7 @@ def run_stream(processor):
         processor=processor
     )
 
-    print("\n▶️ 音频流启动（Ctrl+C 停止）")
+    print("\n▶️ 音频流启动（Ctrl+f2 停止）")
     print("-" * 70)
 
     try:
@@ -134,6 +155,9 @@ def main():
 
         # 🎯 应用组合
         parse_choices(choices, routing)
+
+        if "9" in choices:
+            prompt_echo_ratio(routing)
 
         # 🚀 启动处理
         run_stream(processor)

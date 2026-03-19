@@ -20,13 +20,19 @@ class AudioRouting:
     # 🎯 设置空间效果
     # =========================
     def set_space(self, effect):
-        self.processor.enable_space = effect
+        self.processor.set_space_effect(effect)
+
+    def set_echo_ratio(self, ratio):
+        self.processor.set_echo_ratio(ratio)
+
+    def set_echo_delay(self, delay_ms):
+        self.processor.set_echo_delay(delay_ms)
 
     # =========================
     # 🎯 设置特殊效果
     # =========================
     def set_special(self, effect):
-        self.processor.enable_special = effect
+        self.processor.set_special_effect(effect)
 
     # =========================
     # 🎯 一键组合（核心）
@@ -40,6 +46,12 @@ class AudioRouting:
 
         if config.get("space"):
             self.set_space(config["space"])
+
+        if "echo_ratio" in config:
+            self.set_echo_ratio(config["echo_ratio"])
+
+        if "echo_delay" in config:
+            self.set_echo_delay(config["echo_delay"])
 
         if config.get("special"):
             self.set_special(config["special"])

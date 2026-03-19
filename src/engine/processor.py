@@ -15,7 +15,7 @@ from Project.src.dsp.special_effects.telephone import TelephoneEffect
 from Project.src.dsp.special_effects.Cartoon import CartoonEffect
 
 # ===== config =====
-from .config import VOICE_PRESETS
+from .config import ECHO_DEFAULTS, VOICE_PRESETS
 
 class AudioProcessor:
 
@@ -27,7 +27,11 @@ class AudioProcessor:
         self.psola = PSOLAPitchShifter(fs)
         self.formant = FormantEnvelope(fs)
 
-        self.echo = EchoEffect(fs)
+        self.echo = EchoEffect(
+            fs,
+            delay_ms=ECHO_DEFAULTS["delay_ms"],
+            decay=ECHO_DEFAULTS["ratio"]
+        )
         self.early_reflect = EarlyReflection(fs)
         self.reverb = SchroederReverb(fs)
 
@@ -39,6 +43,7 @@ class AudioProcessor:
         self.enable_pitch = False
         self.enable_space = None      # "reverb" / "echo" / "reflect" / None
         self.enable_special = None    # "robot" / "telephone" / "cartoon" / None
+        self.echo_ratio = ECHO_DEFAULTS["ratio"]
 
     # =========================
     # 🎯 音色设置（唯一需要调参）
@@ -72,6 +77,20 @@ class AudioProcessor:
             return
 
         self.enable_space = effect_name
+
+    def set_echo_ratio(self, ratio):
+        self.echo_ratio = min(max(float(ratio), 0.0), 0.95)
+        self.echo.set_mix_ratio(self.echo_ratio)
+
+    def set_echo_delay(self, delay_ms):
+        self.echo.set_delay_ms(delay_ms)
+
+    def set_echo_params(self, ratio=None, delay_ms=None):
+        if ratio is not None:
+            self.set_echo_ratio(ratio)
+
+        if delay_ms is not None:
+            self.set_echo_delay(delay_ms)
 
     # =========================
     # 🎯 特殊效果选择（无需调参）

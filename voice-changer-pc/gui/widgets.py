@@ -1,0 +1,94 @@
+from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import (
+    QComboBox,
+    QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSlider,
+    QVBoxLayout,
+    QWidget,
+)
+
+class ControlPanel(QWidget):
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.start_button = QPushButton("启动")
+        self.stop_button = QPushButton("停止")
+        self.stop_button.setEnabled(False)
+
+        self.mode_combo = QComboBox()
+        self.mode_combo.addItems(["normal", "doll", "girl", "lady", "boy", "deep", "smoky"])
+
+        self.space_combo = QComboBox()
+        self.space_combo.addItems(["none", "reflect", "echo", "reverb"])
+
+        self.special_combo = QComboBox()
+        self.special_combo.addItems(["none", "robot", "telephone", "cartoon"])
+
+        self.pitch_slider = self._create_slider(-12, 12, 0)
+        self.echo_slider = self._create_slider(0, 100, 40)
+
+        self.pitch_value_label = QLabel("0 semitone")
+        self.echo_value_label = QLabel("40 %")
+
+        self._build_ui()
+        self._bind_default_signals()
+
+    @staticmethod
+    def _create_slider(minimum: int, maximum: int, value: int) -> QSlider:
+        slider = QSlider(Qt.Horizontal)
+        slider.setRange(minimum, maximum)
+        slider.setValue(value)
+        return slider
+
+    def _build_ui(self):
+        root_layout = QVBoxLayout(self)
+        root_layout.addWidget(self._build_transport_box())
+        root_layout.addWidget(self._build_mode_box())
+        root_layout.addWidget(self._build_parameter_box())
+        root_layout.addStretch(1)
+
+    def _build_transport_box(self) -> QGroupBox:
+        group = QGroupBox("运行控制")
+        layout = QHBoxLayout(group)
+        layout.addWidget(self.start_button)
+        layout.addWidget(self.stop_button)
+        return group
+
+    def _build_mode_box(self) -> QGroupBox:
+        group = QGroupBox("模式选择")
+        layout = QFormLayout(group)
+        layout.addRow("音色模式", self.mode_combo)
+        layout.addRow("空间效果", self.space_combo)
+        layout.addRow("特殊效果", self.special_combo)
+        return group
+
+    def _build_parameter_box(self) -> QGroupBox:
+        group = QGroupBox("参数调节")
+        layout = QFormLayout(group)
+        layout.addRow("音高", self._wrap_slider(self.pitch_slider, self.pitch_value_label))
+        layout.addRow("回声强度", self._wrap_slider(self.echo_slider, self.echo_value_label))
+        return group
+
+    @staticmethod
+    def _wrap_slider(slider: QSlider, label: QLabel) -> QWidget:
+        widget = QWidget()
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(slider, stretch=1)
+        layout.addWidget(label)
+        return widget
+
+    def _bind_default_signals(self):
+        self.pitch_slider.valueChanged.connect(self._update_pitch_label)
+        self.echo_slider.valueChanged.connect(self._update_echo_label)
+
+    def _update_pitch_label(self, value: int):
+        self.pitch_value_label.setText(f"{value} semitone")
+
+    def _update_echo_label(self, value: int):
+        self.echo_value_label.setText(f"{value} %")

@@ -6,17 +6,49 @@ import numpy as np
 class EchoEffect:
     def __init__(self, fs, delay_ms=250, decay=0.4, verbose=False):
         self.fs = fs
-        self.delay_ms = delay_ms
-        self.delay_samples = int(fs * delay_ms / 1000)
-        self.decay = decay
+        self.delay_ms = None
+        self.delay_samples = 0
+        self.decay = 0.0
+        self.buffer = np.zeros(1)
         self.verbose = verbose
 
-        self.buffer = np.zeros(self.delay_samples)
         self.ptr = 0
+        self.set_params(delay_ms=delay_ms, decay=decay)
 
         if self.verbose:
             print(f"  ├─ 回声效果: 延迟 {delay_ms}ms ({self.delay_samples}样本)")
             print(f"  └─ 衰减系数: {decay}")
+
+    def set_params(self, delay_ms=None, decay=None):
+        if delay_ms is not None:
+            self.set_delay_ms(delay_ms)
+
+        if decay is not None:
+            self.set_decay(decay)
+
+    def set_delay_ms(self, delay_ms):
+        delay_ms = float(delay_ms)
+        if delay_ms <= 0:
+            raise ValueError("delay_ms must be greater than 0")
+
+        new_delay_samples = max(1, int(self.fs * delay_ms / 1000))
+        if new_delay_samples != self.delay_samples:
+            self.buffer = np.zeros(new_delay_samples)
+            self.ptr = 0
+
+        self.delay_ms = delay_ms
+        self.delay_samples = new_delay_samples
+
+    def set_decay(self, decay):
+        decay = float(decay)
+        self.decay = min(max(decay, 0.0), 0.95)
+
+    def set_mix_ratio(self, ratio):
+        self.set_decay(ratio)
+
+    def reset(self):
+        self.buffer.fill(0.0)
+        self.ptr = 0
 
     # ==========================
     # 主处理函数

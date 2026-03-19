@@ -7,3 +7,8 @@ VOICE_PRESETS = {
     "deep":  {"semitone": -3, "formant": 0.9},
     "smoky": {"semitone": -5, "formant": 0.85},
 }
+
+ECHO_DEFAULTS = {
+    "delay_ms": 250,
+    "ratio": 0.4,
+}
