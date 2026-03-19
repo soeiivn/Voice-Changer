@@ -10,7 +10,7 @@ class AudioStream:
 
         input_block = indata[:,0]
 
-        processed = self.processor.process(input_block)
+        processed = self.processor.process_block(input_block)
 
         outdata[:] = processed.reshape(-1,1)
 

@@ -1,190 +1,143 @@
 import sys
 import os
-import importlib.util
+import time
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 from Project.src.audio.stream import AudioStream
+from engine.processor import AudioProcessor
+from engine.routing import AudioRouting
 
-def print_header(title):
-    """打印标题"""
+# ==========================================
+# 🎛️ 菜单 UI
+# ==========================================
+def show_menu():
     print("\n" + "=" * 70)
-    print(f"🎵 {title}")
+    print("🎛️ 实时变声系统")
     print("=" * 70)
 
-def print_footer(effect_name):
-    """打印结束信息"""
-    print("\n" + "=" * 70)
-    print(f"🏁 {effect_name} 已停止")
-    print("=" * 70)
+    print("\n🎤 音色风格（可选1个）:")
+    print("  1. normal")
+    print("  2. doll（娃娃音）")
+    print("  3. girl（少女音）")
+    print("  4. lady（御姐音）")
+    print("  5. boy（正太音）")
+    print("  6. deep（磁性音）")
+    print("  7. smoky（烟嗓）")
 
-def load_effect_class(module_path, class_name):
-    """动态导入效果器类"""
-    try:
-        spec = importlib.util.spec_from_file_location(
-            class_name,
-            module_path
-        )
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return getattr(module, class_name)
-    except Exception as e:
-        print(f"❌ 导入失败 {module_path}: {e}")
-        return None
+    print("\n🏠 空间效果（可选1个）:")
+    print("  8. 房间反射（reflect）")
+    print("  9. 回声（echo）")
+    print(" 10. 大厅混响（reverb）")
 
-def run_effect(effect_class, effect_name, fs=16000, block_size=256, **kwargs):
-    """通用效果运行函数"""
-    print_header(effect_name)
+    print("\n🤖 特殊效果（可选1个）:")
+    print(" 11. 机器人")
+    print(" 12. 电话")
+    print(" 13. 卡通")
 
-    # 创建效果器
-    try:
-        effect = effect_class(fs, **kwargs)
-        print(f"✅ 效果器初始化成功")
-    except Exception as e:
-        print(f"❌ 效果器初始化失败: {e}")
-        return
+# ==========================================
+# 🎯 解析用户输入
+# ==========================================
+def parse_choices(choice_list, routing: AudioRouting):
 
-    # 创建音频流
-    try:
-        stream = AudioStream(
-            fs=fs,
-            block_size=block_size,
-            processor=effect
-        )
-        print(f"✅ 音频流创建成功")
-        print(f"📊 采样率: {fs}Hz, 块大小: {block_size}")
-    except Exception as e:
-        print(f"❌ 音频流创建失败: {e}")
-        return
+    voice_map = {
+        "1": "normal",
+        "2": "doll",
+        "3": "girl",
+        "4": "lady",
+        "5": "boy",
+        "6": "deep",
+        "7": "smoky",
+    }
 
-    print("▶️ 音频流已启动，按 Ctrl+C 停止...")
+    space_map = {
+        "8": "reflect",
+        "9": "echo",
+        "10": "reverb",
+    }
+
+    special_map = {
+        "11": "robot",
+        "12": "telephone",
+        "13": "cartoon",
+    }
+
+    # ⭐ 重置状态
+    routing.reset()
+
+    for choice in choice_list:
+
+        # ===== 音色 =====
+        if choice in voice_map:
+            routing.set_voice(voice_map[choice])
+
+        # ===== 空间 =====
+        elif choice in space_map:
+            routing.set_space(space_map[choice])
+
+        # ===== 特效 =====
+        elif choice in special_map:
+            routing.set_special(special_map[choice])
+
+        else:
+            print(f"⚠️ 无效选项: {choice}")
+
+
+# ==========================================
+# 🎧 运行
+# ==========================================
+def run_stream(processor):
+
+    stream = AudioStream(
+        fs=16000,
+        block_size=1024,
+        processor=processor
+    )
+
+    print("\n▶️ 音频流启动（Ctrl+C 停止）")
     print("-" * 70)
 
     try:
         stream.start()
 
-        import time
         counter = 0
         while True:
             time.sleep(1)
             counter += 1
             if counter % 5 == 0:
-                print(f"⏱️ 运行中... {counter}秒")
+                print(f"⏱️ 运行中... {counter}s")
 
     except KeyboardInterrupt:
-        print("\n👋 检测到中断信号，正在停止程序...")
-    except Exception as e:
-        print(f"\n❌ 运行时错误: {e}")
+        print("\n👋 停止运行")
     finally:
-        print_footer(effect_name)
         sys.exit(0)
 
+
 # ==========================================
-# 效果器映射
+# 🚀 主程序
 # ==========================================
-EFFECTS = {
-    "1": {
-        "name": "卡通音效",
-        "path": "src/dsp/effects/special effects/Cartoon.py",
-        "class": "CartoonEffect",
-        "params": {"pitch_ratio": 1.8}
-    },
-    "2": {
-        "name": "机器人音效",
-        "path": "src/dsp/effects/special effects/Robot.py",
-        "class": "RobotEffect",
-        "params": {"carrier_freq": 200}
-    },
-    "3": {
-        "name": "电话音效",
-        "path": "src/dsp/effects/special effects/telephone.py",
-        "class": "TelephoneEffect",
-        "params": {}
-    },
-    "4": {
-        "name": "房间混响",
-        "path": "src/dsp/effects/space effects/early_reflection.py",
-        "class": "EarlyReflection",
-        "params": {}
-    },
-    "5": {
-        "name": "回声效果",
-        "path": "src/dsp/effects/space effects/echo.py",
-        "class": "EchoEffect",
-        "params": {"delay_ms": 300, "decay": 0.5}
-    },
-    "6": {
-        "name": "大厅混响",
-        "path": "src/dsp/effects/space effects/schroeder_reverb.py",
-        "class": "SchroederReverb",
-        "params": {}
-    }
-}
-
-def show_menu():
-    """显示菜单"""
-    print("\n" + "=" * 70)
-    print("🎛️  实时音频效果器选择")
-    print("=" * 70)
-    print("特殊效果:")
-    for key in ["1", "2", "3"]:
-        print(f"  {key}. {EFFECTS[key]['name']}")
-    print("\n空间效果:")
-    for key in ["4", "5", "6"]:
-        print(f"  {key}. {EFFECTS[key]['name']}")
-    print("\n  0. 退出程序")
-    print("-" * 70)
-
-def get_effect_by_number(choice):
-    """根据数字获取效果器"""
-    if choice in EFFECTS:
-        return EFFECTS[choice]
-    return None
-
 def main():
-    """主程序"""
+
+    processor = AudioProcessor(fs=16000)
+    routing = AudioRouting(processor)
+
     while True:
         show_menu()
-        choice = input("请输入数字选择效果器 (0-6): ").strip()
 
-        if choice == "0":
-            print("\n👋 程序退出")
+        user_input = input("请输入组合: ").strip()
+
+        if user_input == "0":
+            print("👋 退出程序")
             break
 
-        effect_info = get_effect_by_number(choice)
-        if not effect_info:
-            print("❌ 无效选择，请重新输入")
-            continue
+        choices = user_input.split()
 
-        # 导入效果器类
-        module_path = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            effect_info["path"].replace("/", os.sep)
-        )
+        # 🎯 应用组合
+        parse_choices(choices, routing)
 
-        if not os.path.exists(module_path):
-            print(f"❌ 文件不存在: {module_path}")
-            continue
+        # 🚀 启动处理
+        run_stream(processor)
 
-        effect_class = load_effect_class(module_path, effect_info["class"])
-        if not effect_class:
-            print(f"❌ 无法加载效果器: {effect_info['name']}")
-            continue
-
-        # 运行效果器
-        run_effect(
-            effect_class=effect_class,
-            effect_name=effect_info["name"],
-            fs=16000,
-            block_size=256,
-            **effect_info["params"]
-        )
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        print("\n👋 程序被用户中断")
-    except Exception as e:
-        print(f"\n❌ 程序错误: {e}")
-    finally:
-        sys.exit(0)
+    main()

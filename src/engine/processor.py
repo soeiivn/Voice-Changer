@@ -15,7 +15,7 @@ from Project.src.dsp.special_effects.telephone import TelephoneEffect
 from Project.src.dsp.special_effects.Cartoon import CartoonEffect
 
 # ===== config =====
-from config import VOICE_PRESETS
+from .config import VOICE_PRESETS
 
 class AudioProcessor:
 
