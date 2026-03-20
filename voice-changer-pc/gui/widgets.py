@@ -87,6 +87,18 @@ class ControlPanel(QWidget):
         self.pitch_slider.valueChanged.connect(self._update_pitch_label)
         self.echo_slider.valueChanged.connect(self._update_echo_label)
 
+    def sync_from_state(self, state: dict):
+        self.mode_combo.setCurrentText(state["voice_mode"])
+        self.space_combo.setCurrentText(state["space_effect"])
+        self.special_combo.setCurrentText(state["special_effect"])
+        self.pitch_slider.setValue(int(state["pitch_semitone"]))
+        self.echo_slider.setValue(int(round(state["echo_ratio"] * 100)))
+        self.set_running(state["running"])
+
+    def set_running(self, running: bool):
+        self.start_button.setEnabled(not running)
+        self.stop_button.setEnabled(running)
+
     def _update_pitch_label(self, value: int):
         self.pitch_value_label.setText(f"{value} semitone")
 

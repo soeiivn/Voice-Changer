@@ -1,34 +1,47 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QLabel, QMainWindow, QSplitter, QStatusBar, QVBoxLayout, QWidget
 
-from .visualizer import VisualizerPanel
-from .widgets import ControlPanel
+import sys
+
+try:
+    from controller.engine_controller import EngineController
+    from gui.visualizer import VisualizerPanel
+    from gui.widgets import ControlPanel
+    print("Main window imports successful!")  # 调试用
+except ImportError as e:
+    print(f"Main window import error: {e}")
+    print(f"sys.path: {sys.path}")
 
 class MainWindow(QMainWindow):
 
-    def __init__(self):
+    def __init__(self, controller: EngineController):
         super().__init__()
+        self.controller = controller
+
         self.setWindowTitle("Voice Changer PC")
         self.resize(1180, 720)
 
         self.control_panel = ControlPanel()
         self.visualizer_panel = VisualizerPanel()
-        self.status_label = QLabel("阶段 1：GUI 骨架已就绪，音频引擎尚未接入。")
+        self.status_label = QLabel("阶段 2：控制器准备就绪")
 
         self._build_ui()
         self._bind_signals()
-        self._update_status_from_controls()
+
+        # 初始化 UI 状态
+        self.control_panel.sync_from_state(self.controller.get_state())
+        self.visualizer_panel.update_pipeline(self.controller.build_pipeline_summary())
 
     def _build_ui(self):
         central_widget = QWidget()
         central_layout = QVBoxLayout(central_widget)
 
-        header = QLabel("Voice Changer 桌面端 - 阶段 1 原型")
+        header = QLabel("Voice Changer 桌面端 - 阶段 2 原型")
         header.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         header.setStyleSheet("font-size: 22px; font-weight: bold;")
         central_layout.addWidget(header)
 
-        subtitle = QLabel("当前阶段目标：先完成桌面端基础界面、参数控件和可视化占位区。")
+        subtitle = QLabel("当前阶段目标：让 GUI 与控制器联动，明确实时处理链路与参数流向。")
         subtitle.setWordWrap(True)
         central_layout.addWidget(subtitle)
 
@@ -47,32 +60,26 @@ class MainWindow(QMainWindow):
         self.setStatusBar(status_bar)
 
     def _bind_signals(self):
+        # ===== 按钮 =====
         self.control_panel.start_button.clicked.connect(self._handle_start_clicked)
         self.control_panel.stop_button.clicked.connect(self._handle_stop_clicked)
 
-        self.control_panel.mode_combo.currentTextChanged.connect(lambda _: self._update_status_from_controls())
-        self.control_panel.space_combo.currentTextChanged.connect(lambda _: self._update_status_from_controls())
-        self.control_panel.special_combo.currentTextChanged.connect(lambda _: self._update_status_from_controls())
-        self.control_panel.pitch_slider.valueChanged.connect(lambda _: self._update_status_from_controls())
-        self.control_panel.echo_slider.valueChanged.connect(lambda _: self._update_status_from_controls())
+        # ===== 核心修复：直接绑定 controller（不要再走中转函数） =====
+        self.control_panel.mode_combo.currentTextChanged.connect(self.controller.set_voice_mode)
+        self.control_panel.space_combo.currentTextChanged.connect(self.controller.set_space_effect)
+        self.control_panel.special_combo.currentTextChanged.connect(self.controller.set_special_effect)
 
+        self.control_panel.pitch_slider.valueChanged.connect(self.controller.set_pitch_semitone)
+        self.control_panel.echo_slider.valueChanged.connect(self.controller.set_echo_ratio_from_percent)
+
+        # ===== Controller → UI =====
+        self.controller.state_changed.connect(self.control_panel.sync_from_state)
+        self.controller.status_changed.connect(self.status_label.setText)
+        self.controller.pipeline_changed.connect(self.visualizer_panel.update_pipeline)
+
+    # ===== 按钮 handler =====
     def _handle_start_clicked(self):
-        self.control_panel.start_button.setEnabled(False)
-        self.control_panel.stop_button.setEnabled(True)
-        self.status_label.setText("界面模拟状态：已点击启动。下一阶段将接入音频引擎。")
+        self.controller.start()
 
     def _handle_stop_clicked(self):
-        self.control_panel.start_button.setEnabled(True)
-        self.control_panel.stop_button.setEnabled(False)
-        self._update_status_from_controls(prefix="界面模拟状态：已点击停止。")
-
-    def _update_status_from_controls(self, prefix: str = "当前配置"):
-        mode = self.control_panel.mode_combo.currentText()
-        space = self.control_panel.space_combo.currentText()
-        special = self.control_panel.special_combo.currentText()
-        pitch = self.control_panel.pitch_slider.value()
-        echo = self.control_panel.echo_slider.value()
-
-        self.status_label.setText(
-            f"{prefix} 音色={mode} | 空间={space} | 特效={special} | 音高={pitch} semitone | 回声={echo}%"
-        )
+        self.controller.stop()

@@ -6,3 +6,4 @@ sounddevice==0.5.3
 soundfile==0.13.1
 spicy==0.16.0
 PyQt5==5.15.11
+pytest>=8.0,<9
