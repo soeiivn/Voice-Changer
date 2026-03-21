@@ -23,7 +23,7 @@ class MainWindow(QMainWindow):
 
         self.control_panel = ControlPanel()
         self.visualizer_panel = VisualizerPanel()
-        self.status_label = QLabel("阶段 2：控制器准备就绪")
+        self.status_label = QLabel("阶段 3: 控制器接入音频引擎。")
 
         self._build_ui()
         self._bind_signals()
@@ -31,12 +31,13 @@ class MainWindow(QMainWindow):
         # 初始化 UI 状态
         self.control_panel.sync_from_state(self.controller.get_state())
         self.visualizer_panel.update_pipeline(self.controller.build_pipeline_summary())
+        self.controller.audio_engine.on_spectrum = self.visualizer_panel._update_spectrum
 
     def _build_ui(self):
         central_widget = QWidget()
         central_layout = QVBoxLayout(central_widget)
 
-        header = QLabel("Voice Changer 桌面端 - 阶段 2 原型")
+        header = QLabel("Voice Changer 桌面端 - 阶段 3 原型")
         header.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         header.setStyleSheet("font-size: 22px; font-weight: bold;")
         central_layout.addWidget(header)
@@ -70,12 +71,19 @@ class MainWindow(QMainWindow):
         self.control_panel.special_combo.currentTextChanged.connect(self.controller.set_special_effect)
 
         self.control_panel.pitch_slider.valueChanged.connect(self.controller.set_pitch_semitone)
+        self.control_panel.formant_slider.valueChanged.connect(
+            self.controller.set_formant_shift
+        )
         self.control_panel.echo_slider.valueChanged.connect(self.controller.set_echo_ratio_from_percent)
 
         # ===== Controller → UI =====
         self.controller.state_changed.connect(self.control_panel.sync_from_state)
         self.controller.status_changed.connect(self.status_label.setText)
         self.controller.pipeline_changed.connect(self.visualizer_panel.update_pipeline)
+        self.controller.state_changed.connect(self._force_ui_sync)
+
+    def _force_ui_sync(self, state):
+        self.control_panel.sync_from_state(state)
 
     # ===== 按钮 handler =====
     def _handle_start_clicked(self):

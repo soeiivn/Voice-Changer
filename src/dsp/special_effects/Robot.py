@@ -1,9 +1,6 @@
 import numpy as np
 from scipy.signal import butter, lfilter
 
-# ==========================================
-# Robot Voice Effect
-# ==========================================
 class RobotEffect:
     def __init__(self, fs, carrier_freq=200, verbose=False):
         self.fs = fs

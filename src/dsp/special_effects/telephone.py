@@ -1,10 +1,6 @@
 import numpy as np
 from scipy.signal import butter, lfilter
 
-# ==========================================
-# Telephone Effect
-# Bandpass + Soft Clipping
-# ==========================================
 class TelephoneEffect:
     def __init__(self, fs, verbose=False):
         self.fs = fs

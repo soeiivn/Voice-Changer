@@ -24,7 +24,7 @@ class ControlPanel(QWidget):
         self.mode_combo.addItems(["normal", "doll", "girl", "lady", "boy", "deep", "smoky"])
 
         self.space_combo = QComboBox()
-        self.space_combo.addItems(["none", "reflect", "echo", "reverb"])
+        self.space_combo.addItems(["none", "echo", "room", "hall"])
 
         self.special_combo = QComboBox()
         self.special_combo.addItems(["none", "robot", "telephone", "cartoon"])
@@ -34,6 +34,9 @@ class ControlPanel(QWidget):
 
         self.pitch_value_label = QLabel("0 semitone")
         self.echo_value_label = QLabel("40 %")
+
+        self.formant_slider = self._create_slider(50, 200, 100)  # 0.5 ~ 2.0
+        self.formant_value_label = QLabel("1.00")
 
         self._build_ui()
         self._bind_default_signals()
@@ -71,6 +74,7 @@ class ControlPanel(QWidget):
         group = QGroupBox("参数调节")
         layout = QFormLayout(group)
         layout.addRow("音高", self._wrap_slider(self.pitch_slider, self.pitch_value_label))
+        layout.addRow("共振峰", self._wrap_slider(self.formant_slider, self.formant_value_label))
         layout.addRow("回声强度", self._wrap_slider(self.echo_slider, self.echo_value_label))
         return group
 
@@ -85,6 +89,7 @@ class ControlPanel(QWidget):
 
     def _bind_default_signals(self):
         self.pitch_slider.valueChanged.connect(self._update_pitch_label)
+        self.formant_slider.valueChanged.connect(self._update_formant_label)
         self.echo_slider.valueChanged.connect(self._update_echo_label)
 
     def sync_from_state(self, state: dict):
@@ -92,8 +97,36 @@ class ControlPanel(QWidget):
         self.space_combo.setCurrentText(state["space_effect"])
         self.special_combo.setCurrentText(state["special_effect"])
         self.pitch_slider.setValue(int(state["pitch_semitone"]))
+        self.formant_slider.setValue(int(state["formant_shift"] * 100))
         self.echo_slider.setValue(int(round(state["echo_ratio"] * 100)))
         self.set_running(state["running"])
+
+        # ===============================
+        # ✅ UI锁控逻辑（核心）
+        # ===============================
+        voice_mode = state["voice_mode"]
+        special = state["special_effect"]
+
+        if special != "none":
+            # 👉 已选特效 → 禁用音色
+            self.mode_combo.setEnabled(False)
+            self.special_combo.setEnabled(True)
+            self.formant_slider.setEnabled(False)
+
+        elif voice_mode != "normal":
+            # 👉 已选音色 → 禁用特效
+            self.mode_combo.setEnabled(True)
+            self.formant_slider.setEnabled(True)
+            self.special_combo.setEnabled(False)
+
+        else:
+            # 👉 都没选 → 全开
+            self.mode_combo.setEnabled(True)
+            self.formant_slider.setEnabled(True)
+            self.special_combo.setEnabled(True)
+
+        # ✅ 恢复信号
+        self.blockSignals(False)
 
     def set_running(self, running: bool):
         self.start_button.setEnabled(not running)
@@ -101,6 +134,9 @@ class ControlPanel(QWidget):
 
     def _update_pitch_label(self, value: int):
         self.pitch_value_label.setText(f"{value} semitone")
+
+    def _update_formant_label(self, value):
+        self.formant_value_label.setText(f"{value / 100:.2f}")
 
     def _update_echo_label(self, value: int):
         self.echo_value_label.setText(f"{value} %")

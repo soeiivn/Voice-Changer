@@ -32,4 +32,7 @@ def main() -> int:
     return app.exec_()
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        main()
+    except Exception as e:
+        print("🔥 Main crash:", e)

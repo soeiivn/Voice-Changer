@@ -2,15 +2,12 @@ from dataclasses import asdict, dataclass
 
 from PyQt5.QtCore import QObject, pyqtSignal
 
+try:
+    from controller.audio_engine import AudioEngine
+except ImportError:
+    pass
+
 @dataclass
-class ProcessingState:
-    """State mirrored between the UI and the future audio engine."""
-    running: bool = False
-    voice_mode: str = "normal"
-    space_effect: str = "none"
-    special_effect: str = "none"
-    pitch_semitone: int = 0
-    echo_ratio: float = 0.4
 
 class EngineController(QObject):
 
@@ -18,70 +15,132 @@ class EngineController(QObject):
     status_changed = pyqtSignal(str)
     pipeline_changed = pyqtSignal(str)
 
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.state = ProcessingState()
-        self._emit_full_state("阶段 2：控制器已接入，等待启动音频引擎。")
+    def __init__(self):
+        super().__init__()
 
+        self.audio_engine = AudioEngine()
+
+        # 状态
+        self.voice_mode = "normal"
+
+    # =========================
+    # 🎯 状态获取
+    # =========================
+    def get_state(self):
+        return {
+            "voice_mode": self.voice_mode,
+            "space_effect": self.audio_engine.space_effect,
+            "special_effect": self.audio_engine.special_effect,
+            "pitch_semitone": self.audio_engine.pitch_semitone,
+            "formant_shift": self.audio_engine.formant_shift,
+            "echo_ratio": self.audio_engine.echo_ratio,
+            "running": self.audio_engine.running,
+        }
+
+    # =========================
+    # 🎯 音色（互斥）
+    # =========================
+    def set_voice_mode(self, mode):
+
+        # ❗特效开启 → 禁止音色
+        if self.audio_engine.special_effect != "none" and mode != "normal":
+            self.status_changed.emit("⚠ 特效开启时不能使用音色")
+            return
+
+        self.voice_mode = mode
+
+        if mode == "girl":
+            self.audio_engine.pitch_semitone = 6
+            self.audio_engine.formant_shift = 1.25
+
+        elif mode == "doll":
+            self.audio_engine.pitch_semitone = 10
+            self.audio_engine.formant_shift = 1.3
+
+        elif mode == "boy":
+            self.audio_engine.pitch_semitone = 5
+            self.audio_engine.formant_shift = 1.28
+
+        elif mode == "lady":
+            self.audio_engine.pitch_semitone = 3
+            self.audio_engine.formant_shift = 1.15
+
+        elif mode == "deep":
+            self.audio_engine.pitch_semitone = -3
+            self.audio_engine.formant_shift = 0.9
+
+        elif mode == "smoky":
+            self.audio_engine.pitch_semitone = -5
+            self.audio_engine.formant_shift = 0.85
+
+        else:
+            self.audio_engine.pitch_semitone = 0
+            self.audio_engine.formant_shift = 1.0
+
+        self._emit_all()
+
+    # =========================
+    # 🎯 特效（互斥）
+    # =========================
+    def set_special_effect(self, effect):
+
+        # ❗音色开启 → 禁止特效
+        if self.voice_mode != "normal" and effect != "none":
+            self.status_changed.emit("⚠ 音色开启时不能使用特效")
+            return
+
+        self.audio_engine.special_effect = effect
+        self._emit_all()
+
+    # =========================
+    # 🎯 空间（可叠加）
+    # =========================
+    def set_space_effect(self, effect):
+        self.audio_engine.space_effect = effect
+        self._emit_all()
+
+    def set_echo_ratio_from_percent(self, value):
+        self.audio_engine.echo_ratio = value / 100.0
+        self._emit_all()
+
+    def set_pitch_semitone(self, value):
+        self.audio_engine.pitch_semitone = value
+        self._emit_all()
+
+    def set_formant_shift(self, value):
+        self.audio_engine.formant_shift = value / 100.0
+        self._emit_all()
+
+    # =========================
+    # ▶️ 控制
+    # =========================
     def start(self):
-        self.state.running = True
-        self._emit_full_state("控制器状态：已启动，下一阶段接入真实音频流。")
+        self.audio_engine.start()
+        self._emit_all()
+        self.status_changed.emit("▶️ 已启动")
 
     def stop(self):
-        self.state.running = False
-        self._emit_full_state("控制器状态：已停止。")
+        self.audio_engine.stop()
+        self._emit_all()
+        self.status_changed.emit("⏹️ 已停止")
 
-    def set_voice_mode(self, mode: str):
-        self.state.voice_mode = mode
-        self._emit_full_state()
-
-    def set_space_effect(self, effect: str):
-        self.state.space_effect = effect
-        self._emit_full_state()
-
-    def set_special_effect(self, effect: str):
-        self.state.special_effect = effect
-        self._emit_full_state()
-
-    def set_pitch_semitone(self, value: int):
-        self.state.pitch_semitone = int(value)
-        self._emit_full_state()
-
-    def set_echo_ratio_from_percent(self, value: int):
-        self.state.echo_ratio = max(0.0, min(value / 100.0, 0.95))
-        self._emit_full_state()
-
-    def get_state(self) -> dict:
-        return asdict(self.state)
-
-    def build_pipeline_summary(self) -> str:
-        chain = ["输入语音"]
-
-        if self.state.voice_mode != "normal" or self.state.pitch_semitone != 0:
-            chain.append(f"音高模块[{self.state.voice_mode}, {self.state.pitch_semitone:+d}]")
-
-        if self.state.space_effect != "none":
-            if self.state.space_effect == "echo":
-                chain.append(f"空间模块[echo, ratio={self.state.echo_ratio:.2f}]")
-            else:
-                chain.append(f"空间模块[{self.state.space_effect}]")
-
-        if self.state.special_effect != "none":
-            chain.append(f"特殊模块[{self.state.special_effect}]")
-
-        chain.append("输出语音")
-        return " → ".join(chain)
-
-    def _emit_full_state(self, status_message=None):
-        state_dict = self.get_state()
-        self.state_changed.emit(state_dict)
+    # =========================
+    # 🔁 UI更新
+    # =========================
+    def _emit_all(self):
+        self.state_changed.emit(self.get_state())
         self.pipeline_changed.emit(self.build_pipeline_summary())
 
-        if status_message is None:
-            status_message = (
-                f"当前配置：音色={self.state.voice_mode} | 空间={self.state.space_effect} | "
-                f"特效={self.state.special_effect} | 音高={self.state.pitch_semitone:+d} | "
-                f"回声比例={self.state.echo_ratio:.2f}"
-            )
+    def build_pipeline_summary(self):
 
-        self.status_changed.emit(status_message)
+        parts = []
+
+        if self.audio_engine.special_effect != "none":
+            parts.append(f"Special({self.audio_engine.special_effect})")
+        else:
+            parts.append(f"Voice({self.voice_mode})")
+
+        if self.audio_engine.space_effect != "none":
+            parts.append(f"Space({self.audio_engine.space_effect})")
+
+        return " → ".join(parts)
