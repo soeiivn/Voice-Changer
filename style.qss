@@ -1,0 +1,99 @@
+/* ===== 全局 ===== */
+QWidget {
+    background-color: #1e1e1e;
+    color: #dddddd;
+    font-size: 13px;
+    font-family: "Segoe UI", "Microsoft YaHei";
+}
+
+/* ===== GroupBox（模块卡片）===== */
+QGroupBox {
+    border: 1px solid #3a3a3a;
+    border-radius: 8px;
+    margin-top: 12px;
+    padding: 10px;
+    background-color: #252526;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 6px;
+    color: #9cdcfe;
+    font-weight: bold;
+}
+
+/* ===== 按钮 ===== */
+QPushButton {
+    background-color: #3a3a3a;
+    border: none;
+    border-radius: 6px;
+    padding: 8px;
+}
+
+QPushButton:hover {
+    background-color: #505050;
+}
+
+QPushButton:pressed {
+    background-color: #2a2a2a;
+}
+
+/* Start按钮（绿色高亮） */
+QPushButton[text*="Start"] {
+    background-color: #0e7a0d;
+    font-weight: bold;
+}
+
+QPushButton[text*="Start"]:hover {
+    background-color: #13a10e;
+}
+
+/* Stop按钮（红色） */
+QPushButton[text*="Stop"] {
+    background-color: #a80000;
+}
+
+QPushButton[text*="Stop"]:hover {
+    background-color: #c50f1f;
+}
+
+/* 禁用状态（锁控效果） */
+QWidget:disabled {
+    color: #666666;
+}
+
+/* ===== 下拉框 ===== */
+QComboBox {
+    background-color: #2d2d2d;
+    border: 1px solid #3a3a3a;
+    border-radius: 4px;
+    padding: 4px;
+}
+
+QComboBox:hover {
+    border: 1px solid #007acc;
+}
+
+/* ===== Slider ===== */
+QSlider::groove:horizontal {
+    height: 6px;
+    background: #3a3a3a;
+    border-radius: 3px;
+}
+
+QSlider::handle:horizontal {
+    background: #007acc;
+    width: 12px;
+    margin: -4px 0;
+    border-radius: 6px;
+}
+
+QSlider::handle:horizontal:hover {
+    background: #1f8fff;
+}
+
+/* ===== Label（数值）===== */
+QLabel {
+    color: #cccccc;
+}

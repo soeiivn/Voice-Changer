@@ -1,1 +1,0 @@
-"""GUI package for the phase-1 Voice Changer desktop shell."""

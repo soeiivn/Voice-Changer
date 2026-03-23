@@ -1,9 +1,17 @@
 from dataclasses import asdict, dataclass
-
+import sys
+from pathlib import Path
 from PyQt5.QtCore import QObject, pyqtSignal
 
+# 👉 项目根目录 Project
+ROOT_DIR = Path(__file__).resolve().parent.parent.parent
+
+# 👉 加入 Python 路径
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 try:
-    from controller.audio_engine import AudioEngine
+    from voice_changer_pc.controller.audio_engine import AudioEngine
 except ImportError:
     pass
 
@@ -96,7 +104,18 @@ class EngineController(QObject):
     # 🎯 空间（可叠加）
     # =========================
     def set_space_effect(self, effect):
-        self.audio_engine.space_effect = effect
+        # 🔥 UI → Engine 映射（关键修复）
+        SPACE_MAP = {
+            "none": "none",
+            "echo": "echo",
+            "room": "reflect",  # 👈 关键
+            "hall": "reverb"  # 👈 关键
+        }
+
+        mapped = SPACE_MAP.get(effect, "none")
+
+        self.audio_engine.space_effect = mapped
+
         self._emit_all()
 
     def set_echo_ratio_from_percent(self, value):
