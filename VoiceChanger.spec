@@ -2,7 +2,7 @@
 from PyInstaller.utils.hooks import collect_submodules
 from PyInstaller.utils.hooks import collect_all
 
-datas = []
+datas = [('style.qss', '.'), ('voice_changer_pc/gui/background.jpg', 'voice_changer_pc/gui')]
 binaries = []
 hiddenimports = []
 hiddenimports += collect_submodules('voice_changer_pc')
@@ -45,7 +45,7 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=True,
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
