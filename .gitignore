@@ -1,8 +1,8 @@
-echo "dist/" >> .gitignore
-echo "build/" >> .gitignore
-echo "*.exe" >> .gitignore
-echo "*.pkg" >> .gitignore
-echo "__pycache__/" >> .gitignore
-echo "*.pyc" >> .gitignore
-echo ".venv/" >> .gitignore
-echo "venv/" >> .gitignore
+# 忽略打包文件
+build/
+dist/
+*.exe
+*.pkg
+*.pyz
+*.toc
+*.zip
