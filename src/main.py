@@ -4,7 +4,7 @@ import time
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from Project.src.audio.stream import AudioStream
+from src.audio.stream import AudioStream
 from engine.processor import AudioProcessor
 from engine.routing import AudioRouting
 

@@ -4,8 +4,8 @@ import sys
 import sounddevice as sd
 import os
 import time
-from Project.src.dsp.utils.window import hann_window, apply_window
-from Project.src.dsp.utils.overlap_add import overlap_add
+from src.dsp.utils.window import hann_window, apply_window
+from src.dsp.utils.overlap_add import overlap_add
 
 class PSOLAPitchShifter:
 
@@ -90,9 +90,6 @@ class PSOLAPitchShifter:
 
             # 使用固定系数而非动态归一化
         output *= 0.8
-
-        return output.reshape(input_block.shape)
-
 
 # ==========================================
 # 测试代码 - 按 Ctrl+F2 退出
