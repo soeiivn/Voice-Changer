@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voice Changer Web</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    body { font-family: system-ui, sans-serif; }
+    .neon-blue { text-shadow: 0 0 15px #00aaff; }
+    select:disabled { opacity: 0.4; cursor: not-allowed; }
+  </style>
+</head>
+<body class="bg-[#1e1e1e] text-white min-h-screen">
+  <div class="max-w-4xl mx-auto p-6">
+    <h1 class="text-4xl font-bold neon-blue flex items-center gap-3 mb-8">
+      🎧 Voice Changer <span class="text-[#00aaff]">Pro</span>
+    </h1>
+
+    <div class="grid grid-cols-3 gap-6">
+      <!-- 🎤 Voice -->
+      <div class="bg-[#252525] border border-[#00aaff]/30 rounded-2xl p-6">
+        <div class="flex items-center gap-2 mb-4"><span class="text-2xl">🎤</span><h2 class="text-xl font-semibold">Voice 音调音色</h2></div>
+        <select id="voice_style" class="w-full bg-[#1e1e1e] border border-gray-600 rounded-xl px-4 py-3 focus:border-[#00aaff]">
+          <option value="normal">normal</option>
+          <option value="girl">girl</option>
+          <option value="doll">doll</option>
+          <option value="lady">lady</option>
+          <option value="boy">boy</option>
+          <option value="deep" selected>deep</option>
+          <option value="smoky">smoky</option>
+        </select>
+      </div>
+
+      <!-- 🌌 Space -->
+      <div class="bg-[#252525] border border-[#00aaff]/30 rounded-2xl p-6">
+        <div class="flex items-center gap-2 mb-4"><span class="text-2xl">🌌</span><h2 class="text-xl font-semibold">Space 空间音效</h2></div>
+        <select id="space_effect" class="w-full bg-[#1e1e1e] border border-gray-600 rounded-xl px-4 py-3 focus:border-[#00aaff]">
+          <option value="none" selected>none</option>
+          <option value="echo">echo</option>
+          <option value="room">room</option>
+          <option value="hall">hall</option>
+        </select>
+      </div>
+
+      <!-- ⚡ Special -->
+      <div class="bg-[#252525] border border-[#00aaff]/30 rounded-2xl p-6">
+        <div class="flex items-center gap-2 mb-4"><span class="text-2xl">⚡</span><h2 class="text-xl font-semibold">Special 特殊音效</h2></div>
+        <select id="special_effect" class="w-full bg-[#1e1e1e] border border-gray-600 rounded-xl px-4 py-3 focus:border-[#00aaff]">
+          <option value="none" selected>none</option>
+          <option value="robot">robot</option>
+          <option value="telephone">telephone</option>
+          <option value="cartoon">cartoon</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="mt-10 flex justify-center gap-6">
+      <button id="start_btn" class="flex-1 max-w-xs bg-[#00aaff] hover:bg-[#00ccff] text-black font-bold text-2xl py-6 rounded-3xl flex items-center justify-center gap-3">
+        <i class="fas fa-microphone"></i> 🟢 Start Talking
+      </button>
+      <button id="stop_btn" class="flex-1 max-w-xs bg-red-600 hover:bg-red-500 text-white font-bold text-2xl py-6 rounded-3xl flex items-center justify-center gap-3 hidden">
+        <i class="fas fa-stop"></i> 🔴 Stop
+      </button>
+    </div>
+
+    <div class="mt-8 bg-[#252525] border border-[#00aaff]/20 rounded-3xl p-6">
+      <canvas id="visualizer" width="800" height="160" class="w-full bg-black rounded-2xl"></canvas>
+    </div>
+  </div>
+
+  <script>
+    console.log("🚀 index.html JS 已加载");
+
+    let ws = null;
+    let audioContext = null;
+    let stream = null;
+    let source = null;
+    let workletNode = null;
+    let isRunning = false;
+
+    const voiceSelect = document.getElementById("voice_style");
+    const spaceSelect = document.getElementById("space_effect");
+    const specialSelect = document.getElementById("special_effect");
+
+    // ============== 锁控逻辑（核心）==============
+    function updateLockState() {
+      const voiceVal = voiceSelect.value;
+      const specialVal = specialSelect.value;
+
+      if (specialVal !== "none") {
+        // 特殊音效开启 → 锁定 Voice
+        voiceSelect.disabled = true;
+        voiceSelect.style.opacity = "0.4";
+        if (voiceVal !== "normal") voiceSelect.value = "normal";
+      } else {
+        voiceSelect.disabled = false;
+        voiceSelect.style.opacity = "1";
+      }
+
+      if (voiceVal !== "normal") {
+        // Voice 开启 → 锁定 Special
+        specialSelect.disabled = true;
+        specialSelect.style.opacity = "0.4";
+        if (specialVal !== "none") specialSelect.value = "none";
+      } else {
+        specialSelect.disabled = false;
+        specialSelect.style.opacity = "1";
+      }
+
+      // Space 永远不锁
+      spaceSelect.disabled = false;
+    }
+
+    // ============== 发送控制 ==============
+    function sendControl(type, value) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type, value }));
+        console.log(`📤 发送: ${type} = ${value}`);
+      }
+    }
+
+    // ============== 音频处理 ==============
+    async function startAudioProcessing() {
+      if (isRunning) return;
+      isRunning = true;
+
+      ws = new WebSocket(`ws://${location.host}/ws/audio`);
+      ws.binaryType = "arraybuffer";
+
+      ws.onopen = () => console.log("✅ WS 已连接");
+      ws.onmessage = (e) => {
+        if (workletNode) workletNode.port.postMessage(new Float32Array(e.data));
+      };
+
+      audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+      await audioContext.resume();
+
+      await audioContext.audioWorklet.addModule("/static/processor.js");
+
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      source = audioContext.createMediaStreamSource(stream);
+
+      workletNode = new AudioWorkletNode(audioContext, "audio-processor");
+
+      workletNode.port.onmessage = (e) => {
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(e.data.buffer);
+      };
+
+      source.connect(workletNode);
+      workletNode.connect(audioContext.destination);
+
+      console.log("🎧 实时变声启动成功");
+      drawVisualizer();
+    }
+
+    function stopAudioProcessing() {
+      isRunning = false;
+      if (ws) ws.close();
+      if (workletNode) workletNode.disconnect();
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      if (audioContext) audioContext.close();
+    }
+
+    function drawVisualizer() {
+      const canvas = document.getElementById("visualizer");
+      const ctx = canvas.getContext("2d");
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      const data = new Uint8Array(analyser.frequencyBinCount);
+
+      const loop = () => {
+        if (!isRunning) return;
+        analyser.getByteFrequencyData(data);
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        const barWidth = canvas.width / data.length * 2.5;
+        let x = 0;
+        for (let i = 0; i < data.length; i++) {
+          const height = (data[i] / 255) * canvas.height;
+          ctx.fillStyle = `hsl(200, 100%, ${30 + height/2}%)`;
+          ctx.fillRect(x, canvas.height - height, barWidth, height);
+          x += barWidth + 1;
+        }
+        requestAnimationFrame(loop);
+      };
+      loop();
+    }
+
+    // ============== 初始化 & 绑定 ==============
+    document.addEventListener("DOMContentLoaded", () => {
+      console.log("✅ DOM 加载完成");
+
+      // 初始锁控
+      updateLockState();
+
+      // 下拉框变化时触发锁控 + 发送指令
+      voiceSelect.addEventListener("change", () => {
+        updateLockState();
+        sendControl("voice_style", voiceSelect.value);
+      });
+
+      specialSelect.addEventListener("change", () => {
+        updateLockState();
+        sendControl("special_effect", specialSelect.value);
+      });
+
+      spaceSelect.addEventListener("change", () => {
+        sendControl("space_effect", spaceSelect.value);
+      });
+
+      // Start / Stop
+      document.getElementById("start_btn").addEventListener("click", () => {
+        document.getElementById("start_btn").classList.add("hidden");
+        document.getElementById("stop_btn").classList.remove("hidden");
+        startAudioProcessing();
+      });
+
+      document.getElementById("stop_btn").addEventListener("click", () => {
+        document.getElementById("stop_btn").classList.add("hidden");
+        document.getElementById("start_btn").classList.remove("hidden");
+        stopAudioProcessing();
+      });
+
+      // 默认发送 deep
+      sendControl("voice_style", "deep");
+    });
+  </script>
+</body>
+</html>

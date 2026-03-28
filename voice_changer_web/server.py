@@ -1,97 +1,63 @@
-from fastapi import FastAPI, UploadFile, File
-from fastapi.responses import Response
-from pathlib import Path
-import soundfile as sf
-import io
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
 import numpy as np
-import sys
-ROOT_DIR = Path(__file__).resolve().parent.parent.parent
+import json
+import os
 
-# 👉 加入 Python 路径
-if str(ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR))
+from voice_changer_web.core.engine import AudioEngine
 
-try:
-    from controller.engine_controller import EngineController
-    print("✅ Import success")
-except ImportError as e:
-    pass
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# =========================
-# 🎯 创建 Web 应用
-# =========================
 app = FastAPI()
 
-# =========================
-# 🎯 全局控制器（核心）
-# =========================
-controller = EngineController()
+# 👉 挂载静态文件
+app.mount(
+    "/static",
+    StaticFiles(directory=os.path.join(BASE_DIR, "static")),
+    name="static"
+)
 
-@app.post("/process_audio")
-async def process_audio(file: UploadFile = File(...)):
+engine = AudioEngine(fs=16000)
+
+@app.get("/", response_class=HTMLResponse)
+async def index():
+    file_path = os.path.join(BASE_DIR, "./static/index.html")
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        return f.read()
+
+
+# 🎧 WebSocket 音频接口
+@app.websocket("/ws/audio")
+async def websocket_endpoint(ws: WebSocket):
+    await ws.accept()
+    print("🎧 WebSocket connected")
+
     try:
-        print("📥 收到文件:", file.filename)
+        while True:
+            # 🔥 支持两种消息：bytes（音频） 或 text（控制指令）
+            data = await ws.receive()
 
-        # 1️⃣ 读取
-        data = await file.read()
-        print("📦 文件大小:", len(data))
+            if data.get("bytes"):                     # ← 音频数据
+                audio = np.frombuffer(data["bytes"], dtype=np.float32)
+                processed_audio = engine.process(audio)
+                await ws.send_bytes(processed_audio.astype(np.float32).tobytes())
 
-        # 2️⃣ 解码
-        audio, sr = sf.read(io.BytesIO(data), dtype='float32')
-        print("🎵 音频shape:", audio.shape, "采样率:", sr)
+            elif data.get("text"):                    # ← 控制指令（JSON）
+                try:
+                    msg = json.loads(data["text"])
+                    t = msg.get("type")
+                    v = msg.get("value")
 
-        # 3️⃣ 转单声道
-        if len(audio.shape) > 1:
-            audio = audio.mean(axis=1)
-        processed = controller.audio_engine.process(audio)
-        print("✅ 处理完成")
-
-        # =========================
-        # ⭐ 保存文件（关键）
-        # =========================
-        output_path = f"output_{file.filename}"
-
-        sf.write(output_path, processed, sr)
-        print(f"💾 已保存到: {output_path}")
-
-        # =========================
-        # 返回给浏览器（可有可无）
-        # =========================
-        buffer = io.BytesIO()
-        sf.write(buffer, processed, sr, format='WAV')
-        buffer.seek(0)
-
-        return Response(
-            content=buffer.read(),
-            media_type="audio/wav"
-        )
-    except Exception as e:
-        print("❌ 错误:", str(e))
-        import traceback
-        traceback.print_exc()
-        return {"error": str(e)}
-
-# =========================
-# 🎯 测试接口
-# =========================
-@app.get("/")
-def root():
-    return {"msg": "Voice Changer Web Running"}
-
-# =========================
-# 🎯 设置音色
-# =========================
-@app.post("/set_voice")
-def set_voice(mode: str):
-    controller.set_voice_mode(mode)
-    return {
-        "status": "ok",
-        "mode": mode
-    }
-
-# =========================
-# 🎯 查看当前状态
-# =========================
-@app.get("/state")
-def get_state():
-    return controller.get_state()
+                    if t == "voice_style":
+                        engine.set_voice_style(v)
+                    elif t == "space_effect":
+                        engine.set_space_effect(v if v != "none" else None)
+                    elif t == "special_effect":
+                        engine.set_special_effect(v if v != "none" else None)
+                    print(f"✅ 收到控制指令: {t} = {v}")
+                except Exception as e:
+                    print("JSON parse error:", e)
+    except WebSocketDisconnect:
+        print("🔌 WebSocket disconnected")

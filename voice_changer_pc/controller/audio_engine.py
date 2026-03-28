@@ -1,16 +1,16 @@
 import numpy as np
 import sounddevice as sd
 
-from Project.src.dsp.pitch.psola import PSOLAPitchShifter
-from Project.src.dsp.pitch.formant_envelope import FormantEnvelope
+from src.dsp.pitch.psola import PSOLAPitchShifter
+from src.dsp.pitch.formant_envelope import FormantEnvelope
 
-from Project.src.dsp.space_effects.echo import EchoEffect
-from Project.src.dsp.space_effects.early_reflection import EarlyReflection
-from Project.src.dsp.space_effects.schroeder_reverb import SchroederReverb
+from src.dsp.space_effects.echo import EchoEffect
+from src.dsp.space_effects.early_reflection import EarlyReflection
+from src.dsp.space_effects.schroeder_reverb import SchroederReverb
 
-from Project.src.dsp.special_effects.telephone import TelephoneEffect
-from Project.src.dsp.special_effects.Robot import RobotEffect
-from Project.src.dsp.special_effects.Cartoon import CartoonEffect
+from src.dsp.special_effects.telephone import TelephoneEffect
+from src.dsp.special_effects.Robot import RobotEffect
+from src.dsp.special_effects.Cartoon import CartoonEffect
 
 class AudioEngine:
 
