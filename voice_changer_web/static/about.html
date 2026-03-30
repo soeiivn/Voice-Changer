@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>About - Voice Changer Pro</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body class="bg-[#0f172a] text-white min-h-screen flex flex-col">
+
+  <!-- Navbar -->
+  <header class="flex justify-between items-center px-8 py-6 border-b border-gray-700">
+    <h1 class="text-2xl font-bold text-cyan-400">🎧 VoiceChanger</h1>
+    <nav class="space-x-6 text-gray-300">
+      <a href="/" class="hover:text-white">Home</a>
+      <a href="/app" class="hover:text-white">App</a>
+      <a href="/about" class="text-cyan-400 font-semibold">About</a>
+    </nav>
+  </header>
+
+  <div class="flex-1 max-w-4xl mx-auto px-6 py-12">
+    <h2 class="text-5xl font-bold mb-8 text-center">About VoiceChanger Pro</h2>
+
+    <div class="prose prose-invert max-w-none text-gray-300">
+      <p class="text-xl text-center mb-12">
+        一个完全基于 DSP 的实时语音变声器，支持风格互斥 + 空间音效叠加，纯浏览器运行。
+      </p>
+
+      <div class="grid md:grid-cols-2 gap-8 mt-12">
+
+        <!-- 左侧：技术说明（已补充完整） -->
+        <div class="bg-[#1e293b] p-8 rounded-3xl">
+          <h3 class="text-2xl font-semibold mb-4 flex items-center gap-3"><i class="fas fa-cogs"></i> 核心技术</h3>
+          <ul class="space-y-4 text-gray-300">
+            <li>
+              <strong>音调音色转换</strong><br>
+              PSOLA + Formant Envelope 实现实时 pitch / formant 调整
+            </li>
+            <li>
+              <strong>空间音效（Schroeder Reverb）</strong><br>
+              输入 → 4× Comb Filters（并联） → 2× Allpass Filters（串联）<br>
+              梳状滤波器形成混响尾音，扩散滤波器增加反射密度
+            </li>
+            <li>
+              <strong>特殊音效</strong><br>
+              • 电话：带通滤波 + 轻微失真<br>
+              • 机器人：环形调制 + 低通滤波<br>
+              • 卡通：Pitch Shift + Formant + 非线性增强
+            </li>
+            <li>
+              <strong>实时架构</strong><br>
+              FastAPI + WebSocket + AudioWorklet（超低延迟）
+            </li>
+          </ul>
+        </div>
+
+        <!-- 右侧：特性 -->
+        <div class="bg-[#1e293b] p-8 rounded-3xl">
+          <h3 class="text-2xl font-semibold mb-4 flex items-center gap-3"><i class="fas fa-lightbulb"></i> 核心特性</h3>
+          <ul class="space-y-3 text-gray-300">
+            <li>• 7种预设风格 + Custom 自定义模式</li>
+            <li>• 风格与特殊音效互斥，空间音效可自由叠加</li>
+            <li>• Echo Strength 实时强度调节</li>
+            <li>• Pitch / Formant 实时滑块控制</li>
+            <li>• 锁控 UI（与 PC 端一致）</li>
+            <li>• 电脑浏览器即用或安装 PC 端 APP</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="mt-16 text-center">
+        <a href="/app"
+           class="inline-block bg-cyan-400 text-black font-semibold px-12 py-5 rounded-3xl hover:bg-cyan-300 text-xl">
+          🚀 立即体验变声
+        </a>
+      </div>
+
+      <p class="text-center text-gray-400 mt-16">
+        作者：于皓诠<br>
+        2026 毕业设计项目
+      </p>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="text-center text-gray-500 py-6 text-sm border-t border-gray-700">
+    © 2026 VoiceChanger Project
+  </footer>
+</body>
+</html>

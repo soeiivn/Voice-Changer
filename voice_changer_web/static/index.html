@@ -10,30 +10,71 @@
     body { font-family: system-ui, sans-serif; }
     .neon-blue { text-shadow: 0 0 15px #00aaff; }
     select:disabled { opacity: 0.4; cursor: not-allowed; }
+    .status-bar { background: linear-gradient(to right, #1e1e1e, #252525); }
   </style>
 </head>
 <body class="bg-[#1e1e1e] text-white min-h-screen">
+
+  <!-- Navbar -->
+  <header class="flex justify-between items-center px-8 py-6 border-b border-gray-700 bg-[#1e1e1e]">
+    <h1 class="text-2xl font-bold text-cyan-400">🎧 VoiceChanger</h1>
+    <nav class="space-x-8 text-gray-300">
+      <a href="/" class="hover:text-white">Home</a>
+      <a href="/app" class="text-[#00aaff] font-semibold">App</a>
+      <a href="/about" class="hover:text-white">About</a>
+    </nav>
+  </header>
+
+  <!-- 状态栏 -->
+  <div id="status_bar" class="status-bar border-b border-cyan-400/30 px-8 py-3 flex items-center justify-between text-sm">
+    <div class="flex items-center gap-6">
+      <span class="flex items-center gap-2">
+        <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+        Connected
+      </span>
+      <span id="current_mode" class="text-cyan-400 font-medium">Voice: normal • Space: none • Special: none</span>
+    </div>
+    <div class="text-gray-400 text-xs">16000 Hz • Real-time DSP</div>
+  </div>
+
   <div class="max-w-4xl mx-auto p-6">
     <h1 class="text-4xl font-bold neon-blue flex items-center gap-3 mb-8">
       🎧 Voice Changer <span class="text-[#00aaff]">Pro</span>
     </h1>
 
     <div class="grid grid-cols-3 gap-6">
-      <!-- 🎤 Voice -->
+      <!-- Voice -->
       <div class="bg-[#252525] border border-[#00aaff]/30 rounded-2xl p-6">
         <div class="flex items-center gap-2 mb-4"><span class="text-2xl">🎤</span><h2 class="text-xl font-semibold">Voice 音调音色</h2></div>
         <select id="voice_style" class="w-full bg-[#1e1e1e] border border-gray-600 rounded-xl px-4 py-3 focus:border-[#00aaff]">
-          <option value="normal">normal</option>
+          <option value="normal" selected>normal</option>
           <option value="girl">girl</option>
           <option value="doll">doll</option>
           <option value="lady">lady</option>
           <option value="boy">boy</option>
-          <option value="deep" selected>deep</option>
+          <option value="deep">deep</option>
           <option value="smoky">smoky</option>
+          <option value="custom">custom</option>
         </select>
+
+        <div class="mt-5">
+          <div class="flex justify-between text-sm text-gray-400 mb-1">
+            <span>Pitch</span>
+            <span id="pitch_value" class="font-medium">0 semitone</span>
+          </div>
+          <input type="range" id="pitch_slider" min="-12" max="12" value="0" step="0.1" class="w-full accent-cyan-400 cursor-pointer">
+        </div>
+
+        <div class="mt-5">
+          <div class="flex justify-between text-sm text-gray-400 mb-1">
+            <span>Formant</span>
+            <span id="formant_value" class="font-medium">1.00</span>
+          </div>
+          <input type="range" id="formant_slider" min="0.5" max="2.0" value="1.0" step="0.01" class="w-full accent-cyan-400 cursor-pointer">
+        </div>
       </div>
 
-      <!-- 🌌 Space -->
+      <!-- Space -->
       <div class="bg-[#252525] border border-[#00aaff]/30 rounded-2xl p-6">
         <div class="flex items-center gap-2 mb-4"><span class="text-2xl">🌌</span><h2 class="text-xl font-semibold">Space 空间音效</h2></div>
         <select id="space_effect" class="w-full bg-[#1e1e1e] border border-gray-600 rounded-xl px-4 py-3 focus:border-[#00aaff]">
@@ -42,9 +83,17 @@
           <option value="room">room</option>
           <option value="hall">hall</option>
         </select>
+
+        <div class="mt-6">
+          <div class="flex justify-between text-sm text-gray-400 mb-2">
+            <span>Echo Strength</span>
+            <span id="echo_value" class="font-medium text-cyan-400">40%</span>
+          </div>
+          <input type="range" id="echo_slider" min="0" max="100" value="40" step="1" class="w-full accent-cyan-400 cursor-pointer">
+        </div>
       </div>
 
-      <!-- ⚡ Special -->
+      <!-- Special -->
       <div class="bg-[#252525] border border-[#00aaff]/30 rounded-2xl p-6">
         <div class="flex items-center gap-2 mb-4"><span class="text-2xl">⚡</span><h2 class="text-xl font-semibold">Special 特殊音效</h2></div>
         <select id="special_effect" class="w-full bg-[#1e1e1e] border border-gray-600 rounded-xl px-4 py-3 focus:border-[#00aaff]">
@@ -66,7 +115,7 @@
     </div>
 
     <div class="mt-8 bg-[#252525] border border-[#00aaff]/20 rounded-3xl p-6">
-      <canvas id="visualizer" width="800" height="160" class="w-full bg-black rounded-2xl"></canvas>
+      <canvas id="visualizer" width="900" height="200" class="w-full bg-black rounded-2xl"></canvas>
     </div>
   </div>
 
@@ -83,14 +132,28 @@
     const voiceSelect = document.getElementById("voice_style");
     const spaceSelect = document.getElementById("space_effect");
     const specialSelect = document.getElementById("special_effect");
+    const pitchSlider = document.getElementById("pitch_slider");
+    const pitchValue = document.getElementById("pitch_value");
+    const formantSlider = document.getElementById("formant_slider");
+    const formantValue = document.getElementById("formant_value");
+    const echoSlider = document.getElementById("echo_slider");
+    const echoValue = document.getElementById("echo_value");
 
-    // ============== 锁控逻辑（核心）==============
+    const voicePresets = {
+      "normal": {pitch: 0,   formant: 1.00},
+      "girl":   {pitch: 6,   formant: 1.25},
+      "doll":   {pitch: 10,  formant: 1.30},
+      "lady":   {pitch: 3,   formant: 1.15},
+      "boy":    {pitch: 5,   formant: 1.28},
+      "deep":   {pitch: -3,  formant: 0.90},
+      "smoky":  {pitch: -5,  formant: 0.85}
+    };
+
     function updateLockState() {
       const voiceVal = voiceSelect.value;
       const specialVal = specialSelect.value;
 
       if (specialVal !== "none") {
-        // 特殊音效开启 → 锁定 Voice
         voiceSelect.disabled = true;
         voiceSelect.style.opacity = "0.4";
         if (voiceVal !== "normal") voiceSelect.value = "normal";
@@ -100,7 +163,6 @@
       }
 
       if (voiceVal !== "normal") {
-        // Voice 开启 → 锁定 Special
         specialSelect.disabled = true;
         specialSelect.style.opacity = "0.4";
         if (specialVal !== "none") specialSelect.value = "none";
@@ -108,20 +170,75 @@
         specialSelect.disabled = false;
         specialSelect.style.opacity = "1";
       }
-
-      // Space 永远不锁
       spaceSelect.disabled = false;
     }
 
-    // ============== 发送控制 ==============
     function sendControl(type, value) {
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type, value }));
-        console.log(`📤 发送: ${type} = ${value}`);
       }
     }
 
-    // ============== 音频处理 ==============
+    function applyPreset(style) {
+      if (!voicePresets[style]) return;
+      const p = voicePresets[style];
+      pitchSlider.value = p.pitch;
+      formantSlider.value = p.formant;
+      pitchValue.textContent = p.pitch + " semitone";
+      formantValue.textContent = p.formant.toFixed(2);
+    }
+
+    // ==================== 状态栏更新 ====================
+    function updateStatusBar() {
+      const voice = voiceSelect.value || "normal";
+      const space = spaceSelect.value || "none";
+      const special = specialSelect.value || "none";
+      document.getElementById("current_mode").textContent =
+        `Voice: ${voice} • Space: ${space} • Special: ${special}`;
+    }
+
+    // ==================== 事件绑定 ====================
+    pitchSlider.addEventListener("input", () => {
+      pitchValue.textContent = parseFloat(pitchSlider.value).toFixed(1) + " semitone";
+      voiceSelect.value = "custom";
+      sendControl("pitch", parseFloat(pitchSlider.value));
+      updateStatusBar();
+    });
+
+    formantSlider.addEventListener("input", () => {
+      formantValue.textContent = parseFloat(formantSlider.value).toFixed(2);
+      voiceSelect.value = "custom";
+      sendControl("formant", parseFloat(formantSlider.value));
+      updateStatusBar();
+    });
+
+    echoSlider.addEventListener("input", () => {
+      const percent = parseInt(echoSlider.value);
+      echoValue.textContent = percent + "%";
+      sendControl("echo_ratio", percent / 100);
+      updateStatusBar();
+    });
+
+    voiceSelect.addEventListener("change", () => {
+      updateLockState();
+      const style = voiceSelect.value;
+      if (style !== "custom") applyPreset(style);
+      sendControl("voice_style", style);
+      updateStatusBar();
+    });
+
+    spaceSelect.addEventListener("change", () => {
+      sendControl("space_effect", spaceSelect.value);
+      updateStatusBar();
+    });
+
+    specialSelect.addEventListener("change", () => {
+      updateLockState();
+      sendControl("special_effect", specialSelect.value);
+      updateStatusBar();
+    });
+
+    // ==================== 音频处理（完全未改动） ====================
     async function startAudioProcessing() {
       if (isRunning) return;
       isRunning = true;
@@ -166,52 +283,82 @@
     function drawVisualizer() {
       const canvas = document.getElementById("visualizer");
       const ctx = canvas.getContext("2d");
+
+      // 创建一个 AnalyserNode
       const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 256;
+      analyser.fftSize = 512;                    // 影响分辨率，推荐 256~1024
       source.connect(analyser);
-      const data = new Uint8Array(analyser.frequencyBinCount);
+
+      const bufferLength = analyser.frequencyBinCount;
+      const timeDomainData = new Uint8Array(bufferLength);   // 用于波形
+      const frequencyData = new Uint8Array(bufferLength);    // 用于频谱
+
+      const canvasHeight = canvas.height;
+      const halfHeight = canvasHeight / 2;
 
       const loop = () => {
         if (!isRunning) return;
-        analyser.getByteFrequencyData(data);
-        ctx.fillStyle = "#000";
+
+        // 1. 获取数据
+        analyser.getByteTimeDomainData(timeDomainData);     // 波形数据（0-255）
+        analyser.getByteFrequencyData(frequencyData);       // 频谱数据（0-255）
+
+        // 清空画布
+        ctx.fillStyle = "#111111";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        const barWidth = canvas.width / data.length * 2.5;
+
+        // ==================== 上半部分：波形图 ====================
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "#00ddff";        // 青色波形
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = "#00ddff";
+
+        ctx.beginPath();
+
+        const sliceWidth = canvas.width / bufferLength;
         let x = 0;
-        for (let i = 0; i < data.length; i++) {
-          const height = (data[i] / 255) * canvas.height;
-          ctx.fillStyle = `hsl(200, 100%, ${30 + height/2}%)`;
-          ctx.fillRect(x, canvas.height - height, barWidth, height);
+
+        for (let i = 0; i < bufferLength; i++) {
+          const v = timeDomainData[i] / 128.0;        // 归一化到 0~2
+          const y = (v * halfHeight) - (halfHeight / 2) + (halfHeight / 2);   // 上半部分居中
+
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+
+          x += sliceWidth;
+        }
+        ctx.lineTo(canvas.width, halfHeight);
+        ctx.stroke();
+
+        // ==================== 下半部分：频谱柱状图 ====================
+        const barWidth = (canvas.width / bufferLength) * 2.2;
+        x = 0;
+
+        for (let i = 0; i < bufferLength; i++) {
+          const barHeight = (frequencyData[i] / 255) * halfHeight;   // 下半部分高度
+
+          // 青色渐变（低频偏蓝，高频偏青）
+          const hue = 180 - (i / bufferLength) * 60;
+          ctx.fillStyle = `hsl(${hue}, 100%, 65%)`;
+
+          ctx.fillRect(x, canvasHeight - barHeight, barWidth, barHeight);
+
           x += barWidth + 1;
         }
+
         requestAnimationFrame(loop);
       };
+
       loop();
     }
 
-    // ============== 初始化 & 绑定 ==============
+    // ==================== 初始化 ====================
     document.addEventListener("DOMContentLoaded", () => {
       console.log("✅ DOM 加载完成");
 
-      // 初始锁控
       updateLockState();
+      updateStatusBar();
 
-      // 下拉框变化时触发锁控 + 发送指令
-      voiceSelect.addEventListener("change", () => {
-        updateLockState();
-        sendControl("voice_style", voiceSelect.value);
-      });
-
-      specialSelect.addEventListener("change", () => {
-        updateLockState();
-        sendControl("special_effect", specialSelect.value);
-      });
-
-      spaceSelect.addEventListener("change", () => {
-        sendControl("space_effect", spaceSelect.value);
-      });
-
-      // Start / Stop
       document.getElementById("start_btn").addEventListener("click", () => {
         document.getElementById("start_btn").classList.add("hidden");
         document.getElementById("stop_btn").classList.remove("hidden");
@@ -224,8 +371,7 @@
         stopAudioProcessing();
       });
 
-      // 默认发送 deep
-      sendControl("voice_style", "deep");
+      sendControl("voice_style", "normal");
     });
   </script>
 </body>

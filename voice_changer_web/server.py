@@ -4,31 +4,34 @@ from fastapi.responses import HTMLResponse
 import numpy as np
 import json
 import os
+from pathlib import Path
 
 from voice_changer_web.core.engine import AudioEngine
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = Path(__file__).resolve().parent          # ← 指向 voice_changer_web/
+STATIC_DIR = BASE_DIR / "static"
 
-app = FastAPI()
+app = FastAPI(title="Voice Changer Pro")
 
-# 👉 挂载静态文件
-app.mount(
-    "/static",
-    StaticFiles(directory=os.path.join(BASE_DIR, "static")),
-    name="static"
-)
+# 静态文件（你的路径现在完全正确）
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 engine = AudioEngine(fs=16000)
 
+# ==================== 页面路由 ====================
 @app.get("/", response_class=HTMLResponse)
-async def index():
-    file_path = os.path.join(BASE_DIR, "./static/index.html")
+async def homepage():
+    return (STATIC_DIR / "homepage.html").read_text(encoding="utf-8")
 
-    with open(file_path, "r", encoding="utf-8") as f:
-        return f.read()
+@app.get("/app", response_class=HTMLResponse)
+async def app_page():
+    return (STATIC_DIR / "index.html").read_text(encoding="utf-8")   # 你原来的 index.html 作为工作室
 
+@app.get("/about", response_class=HTMLResponse)
+async def about_page():
+    return (STATIC_DIR / "about.html").read_text(encoding="utf-8")
 
-# 🎧 WebSocket 音频接口
+# ==================== WebSocket（你原来的音频逻辑，完全不动）===================
 @app.websocket("/ws/audio")
 async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
@@ -36,15 +39,13 @@ async def websocket_endpoint(ws: WebSocket):
 
     try:
         while True:
-            # 🔥 支持两种消息：bytes（音频） 或 text（控制指令）
             data = await ws.receive()
-
-            if data.get("bytes"):                     # ← 音频数据
+            if data.get("bytes"):                     # 音频
                 audio = np.frombuffer(data["bytes"], dtype=np.float32)
                 processed_audio = engine.process(audio)
                 await ws.send_bytes(processed_audio.astype(np.float32).tobytes())
 
-            elif data.get("text"):                    # ← 控制指令（JSON）
+            elif data.get("text"):                    # 控制指令
                 try:
                     msg = json.loads(data["text"])
                     t = msg.get("type")
@@ -56,8 +57,18 @@ async def websocket_endpoint(ws: WebSocket):
                         engine.set_space_effect(v if v != "none" else None)
                     elif t == "special_effect":
                         engine.set_special_effect(v if v != "none" else None)
+                    elif t == "pitch":
+                        engine.set_pitch(v)
+                    elif t == "formant":
+                        engine.set_formant(v)
+                    elif t == "echo_ratio":
+                        engine.set_echo_ratio(v)
                     print(f"✅ 收到控制指令: {t} = {v}")
                 except Exception as e:
                     print("JSON parse error:", e)
     except WebSocketDisconnect:
         print("🔌 WebSocket disconnected")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=9000)

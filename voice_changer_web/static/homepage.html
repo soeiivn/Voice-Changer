@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Voice Changer Pro</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#0f172a] text-white min-h-screen flex flex-col">
+
+  <!-- Navbar -->
+  <header class="flex justify-between items-center px-8 py-6">
+    <h1 class="text-2xl font-bold text-cyan-400">🎧 VoiceChanger</h1>
+    <nav class="space-x-6 text-gray-300">
+      <a href="/" class="hover:text-white">Home</a>
+      <a href="/app" class="hover:text-white">App</a>
+      <a href="/about" class="hover:text-white">About</a>
+    </nav>
+  </header>
+
+  <!-- Hero Section -->
+  <main class="flex-1 flex flex-col items-center justify-center text-center px-6">
+    <h2 class="text-5xl md:text-6xl font-extrabold mb-6">
+      Real-Time Voice Changer
+    </h2>
+
+    <p class="text-lg md:text-xl text-gray-300 max-w-2xl mb-10">
+      Speak into your microphone and hear your transformed voice instantly.
+      Powered by real-time DSP and WebSocket streaming.
+    </p>
+
+    <div class="flex gap-6">
+      <a href="/app" class="bg-cyan-400 text-black font-semibold px-8 py-4 rounded-2xl hover:bg-cyan-300 transition">
+        🚀 Try Now
+      </a>
+
+      <a href="/about" class="border border-gray-500 px-8 py-4 rounded-2xl hover:border-white transition">
+        Learn More
+      </a>
+    </div>
+
+    <!-- Feature Highlights -->
+    <div class="mt-20 grid md:grid-cols-3 gap-8 max-w-5xl">
+      <div class="bg-[#1e293b] p-6 rounded-2xl">
+        <h3 class="text-xl font-semibold mb-2">⚡ Real-Time</h3>
+        <p class="text-gray-400">Ultra low-latency audio processing</p>
+      </div>
+
+      <div class="bg-[#1e293b] p-6 rounded-2xl">
+        <h3 class="text-xl font-semibold mb-2">🎛 Effects</h3>
+        <p class="text-gray-400">Multiple voice styles and sound effects</p>
+      </div>
+
+      <div class="bg-[#1e293b] p-6 rounded-2xl">
+        <h3 class="text-xl font-semibold mb-2">🌐 Web-Based</h3>
+        <p class="text-gray-400">No install, works directly in browser</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="text-center text-gray-500 py-6 text-sm">
+    © 2026 VoiceChanger Project
+  </footer>
+
+</body>
+</html>
