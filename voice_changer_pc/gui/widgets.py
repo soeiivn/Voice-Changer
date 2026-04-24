@@ -1,14 +1,7 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
-    QComboBox,
-    QFormLayout,
-    QGroupBox,
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QSlider,
-    QVBoxLayout,
-    QWidget,
+    QComboBox, QFormLayout, QGroupBox, QHBoxLayout,
+    QLabel, QPushButton, QSlider, QVBoxLayout, QWidget,
 )
 
 class ControlPanel(QWidget):
@@ -16,11 +9,12 @@ class ControlPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        # ===== 控件（完全不动）=====
-        self.start_button = QPushButton("🟢 Start Talking")
-        self.stop_button = QPushButton("🔴 Stop")
+        # ==================== 按钮文字汉化 ====================
+        self.start_button = QPushButton("🟢 开始说话")
+        self.stop_button = QPushButton("🔴 停止")
         self.stop_button.setEnabled(False)
 
+        # ==================== 模式和效果选项保持英文原样 ====================
         self.mode_combo = QComboBox()
         self.mode_combo.addItems(["normal", "doll", "girl", "lady", "boy", "deep", "smoky"])
 
@@ -33,7 +27,7 @@ class ControlPanel(QWidget):
         self.pitch_slider = self._create_slider(-12, 12, 0)
         self.echo_slider = self._create_slider(0, 100, 40)
 
-        self.pitch_value_label = QLabel("0 semitone")
+        self.pitch_value_label = QLabel("0 半音")
         self.echo_value_label = QLabel("40 %")
 
         self.formant_slider = self._create_slider(50, 200, 100)
@@ -42,9 +36,6 @@ class ControlPanel(QWidget):
         self._build_ui()
         self._bind_default_signals()
 
-    # =========================
-    # Slider工厂
-    # =========================
     @staticmethod
     def _create_slider(minimum: int, maximum: int, value: int) -> QSlider:
         slider = QSlider(Qt.Horizontal)
@@ -52,31 +43,20 @@ class ControlPanel(QWidget):
         slider.setValue(value)
         return slider
 
-    # =========================
-    # 🔥 UI重构核心
-    # =========================
     def _build_ui(self):
         root_layout = QVBoxLayout(self)
-
-        # 👉 间距（高级感关键）
         root_layout.setSpacing(12)
         root_layout.setContentsMargins(10, 10, 10, 10)
 
-        # ===== 控制区（更突出）=====
         root_layout.addWidget(self._build_transport_box())
-
-        # ===== 三大模块（分组强化）=====
         root_layout.addWidget(self._build_voice_box())
         root_layout.addWidget(self._build_space_box())
         root_layout.addWidget(self._build_special_box())
 
         root_layout.addStretch(1)
 
-    # =========================
-    # 🔥 控制模块（大按钮）
-    # =========================
     def _build_transport_box(self) -> QGroupBox:
-        group = QGroupBox("Control")
+        group = QGroupBox("控制")
         layout = QVBoxLayout(group)
 
         self.start_button.setMinimumHeight(50)
@@ -87,45 +67,33 @@ class ControlPanel(QWidget):
 
         return group
 
-    # =========================
-    # 🎤 Voice模块（核心模块）
-    # =========================
     def _build_voice_box(self) -> QGroupBox:
-        group = QGroupBox("🎤 Voice")
+        group = QGroupBox("🎤 变声")
         layout = QFormLayout(group)
 
-        layout.addRow("Mode", self.mode_combo)
-        layout.addRow("Pitch", self._wrap_slider(self.pitch_slider, self.pitch_value_label))
-        layout.addRow("Formant", self._wrap_slider(self.formant_slider, self.formant_value_label))
+        layout.addRow("模式", self.mode_combo)
+        layout.addRow("音高", self._wrap_slider(self.pitch_slider, self.pitch_value_label))
+        layout.addRow("共振峰", self._wrap_slider(self.formant_slider, self.formant_value_label))
 
         return group
 
-    # =========================
-    # 🌌 Space模块
-    # =========================
     def _build_space_box(self) -> QGroupBox:
-        group = QGroupBox("🌌 Space")
+        group = QGroupBox("🌌 空间感")
         layout = QFormLayout(group)
 
-        layout.addRow("Effect", self.space_combo)
-        layout.addRow("Echo", self._wrap_slider(self.echo_slider, self.echo_value_label))
+        layout.addRow("效果", self.space_combo)
+        layout.addRow("混响", self._wrap_slider(self.echo_slider, self.echo_value_label))
 
         return group
 
-    # =========================
-    # ⚡ Special模块
-    # =========================
     def _build_special_box(self) -> QGroupBox:
-        group = QGroupBox("⚡ Special")
+        group = QGroupBox("⚡ 特殊效果")
         layout = QFormLayout(group)
 
-        layout.addRow("Effect", self.special_combo)
+        layout.addRow("效果", self.special_combo)
 
         return group
 
-    # =========================
-    # Slider + 数值
-    # =========================
     @staticmethod
     def _wrap_slider(slider: QSlider, label: QLabel) -> QWidget:
         widget = QWidget()
@@ -135,26 +103,23 @@ class ControlPanel(QWidget):
         layout.addWidget(label)
         return widget
 
-    # =========================
-    # 信号
-    # =========================
     def _bind_default_signals(self):
         self.pitch_slider.valueChanged.connect(self._update_pitch_label)
         self.formant_slider.valueChanged.connect(self._update_formant_label)
         self.echo_slider.valueChanged.connect(self._update_echo_label)
 
-    # =========================
-    # ❗功能核心
-    # =========================
     def sync_from_state(self, state: dict):
+        # 保持英文原样
         self.mode_combo.setCurrentText(state["voice_mode"])
         self.space_combo.setCurrentText(state["space_effect"])
         self.special_combo.setCurrentText(state["special_effect"])
+
         self.pitch_slider.setValue(int(state["pitch_semitone"]))
         self.formant_slider.setValue(int(state["formant_shift"] * 100))
         self.echo_slider.setValue(int(round(state["echo_ratio"] * 100)))
         self.set_running(state["running"])
 
+        # 互斥逻辑
         voice_mode = state["voice_mode"]
         special = state["special_effect"]
 
@@ -162,12 +127,10 @@ class ControlPanel(QWidget):
             self.mode_combo.setEnabled(False)
             self.special_combo.setEnabled(True)
             self.formant_slider.setEnabled(False)
-
         elif voice_mode != "normal":
             self.mode_combo.setEnabled(True)
             self.formant_slider.setEnabled(True)
             self.special_combo.setEnabled(False)
-
         else:
             self.mode_combo.setEnabled(True)
             self.formant_slider.setEnabled(True)
@@ -180,7 +143,7 @@ class ControlPanel(QWidget):
         self.stop_button.setEnabled(running)
 
     def _update_pitch_label(self, value: int):
-        self.pitch_value_label.setText(f"{value} semitone")
+        self.pitch_value_label.setText(f"{value} 半音")
 
     def _update_formant_label(self, value):
         self.formant_value_label.setText(f"{value / 100:.2f}")

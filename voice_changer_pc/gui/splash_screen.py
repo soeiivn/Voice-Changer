@@ -10,20 +10,16 @@ class SplashScreen(QWidget):
         self.setFixedSize(500, 300)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
 
-        # ===== 布局 =====
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignCenter)
 
-        # ===== 标题 =====
-        self.title = QLabel("🎧 Voice Changer Pro")
-        self.title.setFont(QFont("Arial", 20, QFont.Bold))
+        self.title = QLabel("🎧 Voice Changer PC")
+        self.title.setFont(QFont("Microsoft YaHei", 20, QFont.Bold))  # 推荐使用微软雅黑
         self.title.setAlignment(Qt.AlignCenter)
 
-        # ===== 状态 =====
-        self.status = QLabel("Initializing...")
+        self.status = QLabel("正在初始化...")
         self.status.setAlignment(Qt.AlignCenter)
 
-        # ===== 进度条 =====
         self.progress = QProgressBar()
         self.progress.setFixedWidth(300)
         self.progress.setValue(0)
@@ -34,7 +30,6 @@ class SplashScreen(QWidget):
         layout.addSpacing(10)
         layout.addWidget(self.progress)
 
-        # ===== 样式（重点）=====
         self.setStyleSheet("""
             QWidget {
                 background-color: #1e1e1e;
@@ -51,7 +46,6 @@ class SplashScreen(QWidget):
             }
         """)
 
-        # ===== 进度模拟 =====
         self.timer = QTimer()
         self.timer.timeout.connect(self._update_progress)
         self.timer.start(30)
@@ -62,15 +56,14 @@ class SplashScreen(QWidget):
         self.value += 1
         self.progress.setValue(self.value)
 
-        # 模拟加载阶段
         if self.value < 30:
-            self.status.setText("Loading Audio Engine...")
+            self.status.setText("正在加载音频引擎...")
         elif self.value < 60:
-            self.status.setText("Initializing DSP Modules...")
+            self.status.setText("正在初始化 DSP 模块...")
         elif self.value < 90:
-            self.status.setText("Preparing UI...")
+            self.status.setText("正在准备界面...")
         else:
-            self.status.setText("Starting...")
+            self.status.setText("启动中...")
 
         if self.value >= 100:
             self.timer.stop()

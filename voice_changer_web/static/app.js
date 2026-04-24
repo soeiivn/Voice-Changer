@@ -21,11 +21,11 @@ document.addEventListener('DOMContentLoaded', () => {
   spaceSelect.addEventListener('change', () => sendControl('space_effect', spaceSelect.value));
   specialSelect.addEventListener('change', () => sendControl('special_effect', specialSelect.value));
 
-  // Start / Stop
+  // 开始 / 停止按钮
   startBtn.addEventListener('click', () => {
     startBtn.classList.add('hidden');
     stopBtn.classList.remove('hidden');
-    window.startAudioProcessing(ws);   // 调用 audio.js 的函数
+    window.startAudioProcessing(ws);   // 调用 audio.js 中的开始处理函数
   });
 
   stopBtn.addEventListener('click', () => {
@@ -34,9 +34,11 @@ document.addEventListener('DOMContentLoaded', () => {
     window.stopAudioProcessing();
   });
 
-  // WebSocket 重连
+  // WebSocket 重连逻辑
   ws.onclose = () => {
-    console.log('WS 断开，3秒后重连...');
-    setTimeout(() => { ws = new WebSocket(wsUrl); }, 3000);
+    console.log('WebSocket 已断开，3秒后尝试重新连接...');
+    setTimeout(() => {
+      ws = new WebSocket(wsUrl);
+    }, 3000);
   };
 });

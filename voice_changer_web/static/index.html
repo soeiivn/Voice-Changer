@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Voice Changer Web</title>
+  <title>实时语音变声器</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
-    body { font-family: system-ui, sans-serif; }
+    body { font-family: system-ui, -apple-system, "Microsoft YaHei", sans-serif; }
     .neon-blue { text-shadow: 0 0 15px #00aaff; }
     select:disabled { opacity: 0.4; cursor: not-allowed; }
     .status-bar { background: linear-gradient(to right, #1e1e1e, #252525); }
@@ -19,9 +19,9 @@
   <header class="flex justify-between items-center px-8 py-6 border-b border-gray-700 bg-[#1e1e1e]">
     <h1 class="text-2xl font-bold text-cyan-400">🎧 VoiceChanger</h1>
     <nav class="space-x-8 text-gray-300">
-      <a href="/" class="hover:text-white">Home</a>
-      <a href="/app" class="text-[#00aaff] font-semibold">App</a>
-      <a href="/about" class="hover:text-white">About</a>
+      <a href="/" class="hover:text-white">首页</a>
+      <a href="/app" class="text-[#00aaff] font-semibold">应用</a>
+      <a href="/about" class="hover:text-white">关于</a>
     </nav>
   </header>
 
@@ -30,22 +30,25 @@
     <div class="flex items-center gap-6">
       <span class="flex items-center gap-2">
         <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-        Connected
+        已连接
       </span>
-      <span id="current_mode" class="text-cyan-400 font-medium">Voice: normal • Space: none • Special: none</span>
+      <span id="current_mode" class="text-cyan-400 font-medium">模式: normal • 空间: none • 特效: none</span>
     </div>
-    <div class="text-gray-400 text-xs">16000 Hz • Real-time DSP</div>
+    <div class="text-gray-400 text-xs">16000 Hz • 实时 DSP 处理</div>
   </div>
 
   <div class="max-w-4xl mx-auto p-6">
     <h1 class="text-4xl font-bold neon-blue flex items-center gap-3 mb-8">
-      🎧 Voice Changer <span class="text-[#00aaff]">Pro</span>
+      🎧 实时语音 <span class="text-[#00aaff]">变声器</span>
     </h1>
 
     <div class="grid grid-cols-3 gap-6">
       <!-- Voice -->
       <div class="bg-[#252525] border border-[#00aaff]/30 rounded-2xl p-6">
-        <div class="flex items-center gap-2 mb-4"><span class="text-2xl">🎤</span><h2 class="text-xl font-semibold">Voice 音调音色</h2></div>
+        <div class="flex items-center gap-2 mb-4">
+          <span class="text-2xl">🎤</span>
+          <h2 class="text-xl font-semibold">变声模式</h2>
+        </div>
         <select id="voice_style" class="w-full bg-[#1e1e1e] border border-gray-600 rounded-xl px-4 py-3 focus:border-[#00aaff]">
           <option value="normal" selected>normal</option>
           <option value="girl">girl</option>
@@ -59,7 +62,7 @@
 
         <div class="mt-5">
           <div class="flex justify-between text-sm text-gray-400 mb-1">
-            <span>Pitch</span>
+            <span>音高调整</span>
             <span id="pitch_value" class="font-medium">0 semitone</span>
           </div>
           <input type="range" id="pitch_slider" min="-12" max="12" value="0" step="0.1" class="w-full accent-cyan-400 cursor-pointer">
@@ -67,7 +70,7 @@
 
         <div class="mt-5">
           <div class="flex justify-between text-sm text-gray-400 mb-1">
-            <span>Formant</span>
+            <span>共振峰</span>
             <span id="formant_value" class="font-medium">1.00</span>
           </div>
           <input type="range" id="formant_slider" min="0.5" max="2.0" value="1.0" step="0.01" class="w-full accent-cyan-400 cursor-pointer">
@@ -76,7 +79,10 @@
 
       <!-- Space -->
       <div class="bg-[#252525] border border-[#00aaff]/30 rounded-2xl p-6">
-        <div class="flex items-center gap-2 mb-4"><span class="text-2xl">🌌</span><h2 class="text-xl font-semibold">Space 空间音效</h2></div>
+        <div class="flex items-center gap-2 mb-4">
+          <span class="text-2xl">🌌</span>
+          <h2 class="text-xl font-semibold">空间音效</h2>
+        </div>
         <select id="space_effect" class="w-full bg-[#1e1e1e] border border-gray-600 rounded-xl px-4 py-3 focus:border-[#00aaff]">
           <option value="none" selected>none</option>
           <option value="echo">echo</option>
@@ -86,7 +92,7 @@
 
         <div class="mt-6">
           <div class="flex justify-between text-sm text-gray-400 mb-2">
-            <span>Echo Strength</span>
+            <span>混响强度</span>
             <span id="echo_value" class="font-medium text-cyan-400">40%</span>
           </div>
           <input type="range" id="echo_slider" min="0" max="100" value="40" step="1" class="w-full accent-cyan-400 cursor-pointer">
@@ -95,7 +101,10 @@
 
       <!-- Special -->
       <div class="bg-[#252525] border border-[#00aaff]/30 rounded-2xl p-6">
-        <div class="flex items-center gap-2 mb-4"><span class="text-2xl">⚡</span><h2 class="text-xl font-semibold">Special 特殊音效</h2></div>
+        <div class="flex items-center gap-2 mb-4">
+          <span class="text-2xl">⚡</span>
+          <h2 class="text-xl font-semibold">特殊音效</h2>
+        </div>
         <select id="special_effect" class="w-full bg-[#1e1e1e] border border-gray-600 rounded-xl px-4 py-3 focus:border-[#00aaff]">
           <option value="none" selected>none</option>
           <option value="robot">robot</option>
@@ -107,10 +116,10 @@
 
     <div class="mt-10 flex justify-center gap-6">
       <button id="start_btn" class="flex-1 max-w-xs bg-[#00aaff] hover:bg-[#00ccff] text-black font-bold text-2xl py-6 rounded-3xl flex items-center justify-center gap-3">
-        <i class="fas fa-microphone"></i> 🟢 Start Talking
+        <i class="fas fa-microphone"></i> 🟢 开始说话
       </button>
       <button id="stop_btn" class="flex-1 max-w-xs bg-red-600 hover:bg-red-500 text-white font-bold text-2xl py-6 rounded-3xl flex items-center justify-center gap-3 hidden">
-        <i class="fas fa-stop"></i> 🔴 Stop
+        <i class="fas fa-stop"></i> 🔴 停止
       </button>
     </div>
 
@@ -188,13 +197,12 @@
       formantValue.textContent = p.formant.toFixed(2);
     }
 
-    // ==================== 状态栏更新 ====================
     function updateStatusBar() {
       const voice = voiceSelect.value || "normal";
       const space = spaceSelect.value || "none";
       const special = specialSelect.value || "none";
       document.getElementById("current_mode").textContent =
-        `Voice: ${voice} • Space: ${space} • Special: ${special}`;
+        `模式: ${voice} • 空间: ${space} • 特效: ${special}`;
     }
 
     // ==================== 事件绑定 ====================
@@ -238,7 +246,7 @@
       updateStatusBar();
     });
 
-    // ==================== 音频处理（完全未改动） ====================
+    // ==================== 音频处理（逻辑完全未改动） ====================
     async function startAudioProcessing() {
       if (isRunning) return;
       isRunning = true;
@@ -284,14 +292,13 @@
       const canvas = document.getElementById("visualizer");
       const ctx = canvas.getContext("2d");
 
-      // 创建一个 AnalyserNode
       const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 512;                    // 影响分辨率，推荐 256~1024
+      analyser.fftSize = 512;
       source.connect(analyser);
 
       const bufferLength = analyser.frequencyBinCount;
-      const timeDomainData = new Uint8Array(bufferLength);   // 用于波形
-      const frequencyData = new Uint8Array(bufferLength);    // 用于频谱
+      const timeDomainData = new Uint8Array(bufferLength);
+      const frequencyData = new Uint8Array(bufferLength);
 
       const canvasHeight = canvas.height;
       const halfHeight = canvasHeight / 2;
@@ -299,50 +306,40 @@
       const loop = () => {
         if (!isRunning) return;
 
-        // 1. 获取数据
-        analyser.getByteTimeDomainData(timeDomainData);     // 波形数据（0-255）
-        analyser.getByteFrequencyData(frequencyData);       // 频谱数据（0-255）
+        analyser.getByteTimeDomainData(timeDomainData);
+        analyser.getByteFrequencyData(frequencyData);
 
-        // 清空画布
         ctx.fillStyle = "#111111";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // ==================== 上半部分：波形图 ====================
+        // 波形图
         ctx.lineWidth = 3;
-        ctx.strokeStyle = "#00ddff";        // 青色波形
+        ctx.strokeStyle = "#00ddff";
         ctx.shadowBlur = 10;
         ctx.shadowColor = "#00ddff";
 
         ctx.beginPath();
-
         const sliceWidth = canvas.width / bufferLength;
         let x = 0;
 
         for (let i = 0; i < bufferLength; i++) {
-          const v = timeDomainData[i] / 128.0;        // 归一化到 0~2
-          const y = (v * halfHeight) - (halfHeight / 2) + (halfHeight / 2);   // 上半部分居中
-
+          const v = timeDomainData[i] / 128.0;
+          const y = (v * halfHeight) - (halfHeight / 2) + (halfHeight / 2);
           if (i === 0) ctx.moveTo(x, y);
           else ctx.lineTo(x, y);
-
           x += sliceWidth;
         }
         ctx.lineTo(canvas.width, halfHeight);
         ctx.stroke();
 
-        // ==================== 下半部分：频谱柱状图 ====================
+        // 频谱图
         const barWidth = (canvas.width / bufferLength) * 2.2;
         x = 0;
-
         for (let i = 0; i < bufferLength; i++) {
-          const barHeight = (frequencyData[i] / 255) * halfHeight;   // 下半部分高度
-
-          // 青色渐变（低频偏蓝，高频偏青）
+          const barHeight = (frequencyData[i] / 255) * halfHeight;
           const hue = 180 - (i / bufferLength) * 60;
           ctx.fillStyle = `hsl(${hue}, 100%, 65%)`;
-
           ctx.fillRect(x, canvasHeight - barHeight, barWidth, barHeight);
-
           x += barWidth + 1;
         }
 

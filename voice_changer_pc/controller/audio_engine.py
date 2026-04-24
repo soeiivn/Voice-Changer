@@ -1,6 +1,8 @@
 import numpy as np
 import sounddevice as sd
 
+from voice_changer_pc.audio_utils.resample import downsample_48k_to_16k, upsample_16k_to_48k
+
 from src.dsp.pitch.psola import PSOLAPitchShifter
 from src.dsp.pitch.formant_envelope import FormantEnvelope
 
@@ -14,9 +16,14 @@ from src.dsp.special_effects.Cartoon import CartoonEffect
 
 class AudioEngine:
 
-    def __init__(self, fs=16000, block_size=1024):
-        self.fs = fs
+    def __init__(self, fs=16000, block_size=1536,
+                 input_device=None, output_device=None):
+        self.internal_fs = fs
+        self.external_fs = 48000
         self.block_size = block_size
+
+        self.input_device = input_device
+        self.output_device = output_device
 
         # ===== 参数 =====
         self.pitch_semitone = 0
@@ -27,16 +34,16 @@ class AudioEngine:
         self.special_effect = "none"
 
         # ===== 模块 =====
-        self.pitch = PSOLAPitchShifter(fs)
-        self.formant = FormantEnvelope(fs)
+        self.pitch = PSOLAPitchShifter(self.internal_fs)
+        self.formant = FormantEnvelope(self.internal_fs)
 
-        self.echo = EchoEffect(fs)
-        self.reflect = EarlyReflection(fs)
-        self.reverb = SchroederReverb(fs)
+        self.echo = EchoEffect(self.internal_fs)
+        self.reflect = EarlyReflection(self.internal_fs)
+        self.reverb = SchroederReverb(self.internal_fs)
 
-        self.telephone = TelephoneEffect(fs)
-        self.robot = RobotEffect(fs)
-        self.cartoon = CartoonEffect(fs)
+        self.telephone = TelephoneEffect(self.internal_fs)
+        self.robot = RobotEffect(self.internal_fs)
+        self.cartoon = CartoonEffect(self.internal_fs)
 
         self.stream = None
         self.running = False
@@ -62,13 +69,23 @@ class AudioEngine:
                 x = self.cartoon.process(x)
 
         else:
+
             # 🎯 音色模块
+
             self.pitch.set_semitone(self.pitch_semitone)
+
             self.formant.shift = self.formant_shift
 
-            x = self.pitch.process_block(x)
-            x = self.formant.process(x)
+            # 🔥 第二阶段智能 bypass
 
+            need_pitch = abs(self.pitch_semitone) > 0.1
+
+            need_formant = abs(self.formant_shift - 1.0) > 0.02
+
+            if need_pitch or need_formant:
+                x = self.pitch.process_block(x)
+
+                x = self.formant.process(x)
         # ===== ② 空间模块（可叠加）=====
         if self.space_effect == "echo":
             self.echo.set_mix_ratio(self.echo_ratio)
@@ -83,27 +100,54 @@ class AudioEngine:
         # ===== ③ 频谱 =====
         if self.on_spectrum is not None:
             spectrum = np.abs(np.fft.rfft(x))
-            self.on_spectrum(spectrum)
 
+            # 🔥 关键修复：强制补到 512 长度（可视化面板需要）
+            if len(spectrum) < 512:
+                padded = np.zeros(512, dtype=np.float32)
+                padded[:len(spectrum)] = spectrum
+                spectrum = padded
+            else:
+                spectrum = spectrum[:512]
+
+            self.on_spectrum(spectrum)
         return x
 
     # ==========================
     # 🎤 音频回调（唯一入口）
     # ==========================
     def _callback(self, indata, outdata, frames, time, status):
-
         try:
-            x = indata[:, 0]
-            y = self.process(x)
-            if len(y) != len(x):
-                y = np.zeros_like(x)
+            # 输入是 48kHz
+            x_48k = indata[:, 0].astype(np.float32)
 
-            outdata[:, 0] = y
+            # 1. 输入降噪（防止爆炸声）
+            rms = np.sqrt(np.mean(x_48k ** 2))
+            if rms > 0.3:  # 输入太响就压低
+                x_48k = x_48k * 0.5
+            else:
+                x_48k = x_48k * 0.8
+
+            # 2. 降采样到 16kHz
+            x_16k = downsample_48k_to_16k(x_48k)
+
+            # 3. DSP 处理
+            y_16k = self.process(x_16k)
+
+            # 4. 升采样回 48kHz
+            y_48k = upsample_16k_to_48k(y_16k)
+
+            # 5. 输出轻微增益（让变声更明显）
+            y_48k = y_48k * 1.15
+
+            # 6. 长度对齐
+            if len(y_48k) != frames:
+                y_48k = np.resize(y_48k, frames)
+
+            outdata[:, 0] = np.clip(y_48k, -1.0, 1.0)
 
         except Exception as e:
             print("Audio error:", e)
             outdata[:, 0] = np.zeros(frames)
-
     # ==========================
     # ▶️ 启动
     # ==========================
@@ -113,9 +157,11 @@ class AudioEngine:
             return
 
         self.stream = sd.Stream(
-            samplerate=self.fs,
+            samplerate=self.external_fs,
             blocksize=self.block_size,
             channels=1,
+            dtype='float32',
+            device=(self.input_device, self.output_device),  # ← 输入真实麦克风，输出 CABLE Input
             callback=self._callback
         )
 

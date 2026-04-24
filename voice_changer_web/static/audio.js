@@ -1,5 +1,3 @@
-console.log("📦 audio.js loaded (Worklet 版本)");
-
 let ws = null;
 let audioContext = null;
 let stream = null;

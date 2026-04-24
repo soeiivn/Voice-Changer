@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+import sounddevice as sd
 
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import QTimer
@@ -17,6 +18,7 @@ try:
     from voice_changer_pc.controller.engine_controller import EngineController
     from voice_changer_pc.gui.main_window import MainWindow
     from voice_changer_pc.gui.splash_screen import SplashScreen
+    from voice_changer_pc.controller.audio_engine import AudioEngine
     print("Imports successful!")
 except ImportError as e:
     print(f"Import error: {e}")
@@ -27,18 +29,6 @@ except ImportError as e:
 def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName("Voice Changer PC")
-
-    # =========================
-    # 🎨 加载 QSS（修复路径问题）
-    # =========================
-    try:
-        if qss_path.exists():
-            with open(qss_path, "r", encoding="utf-8") as f:
-                app.setStyleSheet(f.read())
-        else:
-            print("QSS not found:", qss_path)
-    except Exception as e:
-        print("QSS load failed:", e)
 
     # =========================
     # 🚀 启动页
@@ -58,11 +48,17 @@ def main() -> int:
         print("Starting main window...")
 
         app.controller = EngineController()
+
+        app.controller.audio_engine = AudioEngine(
+            input_device=2,
+            output_device=6
+        )
+
         app.main_window = MainWindow(controller=app.controller)
 
         app.main_window.show()
 
-    # 👉 3秒后启动主窗口（可改2秒）
+    # 👉 3秒后启动主窗口
     QTimer.singleShot(3000, start_main)
 
     return app.exec_()
